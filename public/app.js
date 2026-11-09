@@ -63,7 +63,7 @@ let SV=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
 function mountSolver(){
   const root=$("#solverRoot"); root.innerHTML=""; root.className="";
   const transport=mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},peer:()=>myPeer,name:()=>myName||"Someone",canEdit:()=>isT()||svOn}:null;
-  SV=createSolver(root,{transport,anchors:mode==="lobby",table:{current:()=>view(),canPush:()=>isT(),push:(k,card)=>{sendOp({t:"pick",kind:"board",k,card});flash(`${k===3?"Turn":"River"} set to ${pretty(card)} on the table`)}}});
+  SV=createSolver(root,{transport,anchors:mode==="lobby",table:{current:()=>view(),canPush:()=>isT(),push:(k,card)=>{if(E.G&&E.used().has(card)){flash(`${pretty(card)} is in a player's hand, so the table can't deal it`);return false}sendOp({t:"pick",kind:"board",k,card});flash(`${k===3?"Turn":"River"} set to ${pretty(card)} on the table`);return true}}});
   svOn=mode==="local";
 }
 const solverAllowed=()=>!!mode&&(isT()||svOn);
