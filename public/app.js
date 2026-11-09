@@ -346,10 +346,10 @@ function renderHome(){
   const live=homeList||[];
   let h;
   if(homeList==null) h=`<p class="note">${homeListErr?"Can't reach the server right now. Retrying…":"Loading lobbies…"}</p>`;
-  else h=live.length?live.map(l=>{const id=esc(l.id);
+  else h=live.length?live.map(l=>{const id=esc(l.id); const mine=!!codes()[l.id];
     return `<div class="lob${l.live?" live":""}"><div><div class="ttl">${esc(String(l.name||"Lobby").slice(0,28))}</div>
       <div class="meta"><span class="dot ${l.live?"on":""}" style="display:inline-block;margin-right:5px"></span>${l.live?"Teacher here":"No teacher right now"} · code ${esc(String(l.id).toUpperCase())} · ${esc(String(l.stakes||"").slice(0,16))} · ${+l.seated||0}/${+l.size||0} seated${l.hand?` · hand #${+l.hand}`:""}</div></div>
-      <div class="row"><button class="b sm primary" type="button" data-join="${id}">Join as student</button><button class="b sm" type="button" data-teach="${id}">Teach</button></div></div>`}).join("")
+      <div class="row">${mine?`<button class="b sm primary" type="button" data-rejoin="${id}">Rejoin as teacher</button><button class="b sm" type="button" data-join="${id}">Join as student</button><button class="b sm" type="button" data-teach="${id}">Manage</button>`:`<button class="b sm primary" type="button" data-join="${id}">Join as student</button><button class="b sm" type="button" data-teach="${id}">Teach</button>`}</div></div>`}).join("")
     :`<p class="note">No lobbies yet. Start one below.</p>`;
   setHTML($("#dirList"),h);
   $("#keyField").hidden=!needsKey;
@@ -460,6 +460,7 @@ document.addEventListener("click",e=>{
     if(t.id==="practiceBtn"){enterLocal();return}
     if(t.id==="createBtn"){createLobby();return}
     if(t.dataset.join){enterLobby(t.dataset.join,"student");return}
+    if(t.dataset.rejoin){const c=codes()[t.dataset.rejoin];if(c) enterLobby(t.dataset.rejoin,"teacher",c); else {teachFor={id:t.dataset.rejoin,name:t.dataset.rejoin};render()}return}
     if(t.dataset.teach){const l=(homeList||[]).find(x=>x.id===t.dataset.teach);teachFor={id:t.dataset.teach,name:l?l.name:t.dataset.teach};delConfirm=false;$("#teachCode").value=codes()[teachFor.id]||"";render();$("#teachCode").focus();return}
     if(t.id==="teachCancel"){teachFor=null;render();return}
     if(t.id==="teachGo"){const c=$("#teachCode").value.trim();if(!c){homeErr("Enter the teacher code.");return}enterLobby(teachFor.id,"teacher",c);teachFor=null;return}
