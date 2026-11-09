@@ -6,7 +6,7 @@
 // - Linked to a table hand, it follows the table's cards and bets, and a teacher picking the next card
 //   in the solver sets that card on the table.
 // Card ids follow the engine: id = 4 * rank + suit (rank 0 = deuce .. 12 = ace; suits c, d, h, s).
-import { cellName, cellCombos, parseRange, formatRange, comboCount, PRESETS, guessRanges } from "./range.js";
+import { cellName, cellCombos, parseRange, formatRange, comboCount, PRESETS } from "./range.js";
 
 const RANKS = "23456789TJQKA", SUITS = "cdhs", SYM = { s: "♠", h: "♥", d: "♦", c: "♣" };
 const APP_PORT = 47123;
@@ -123,25 +123,33 @@ export function applySpotPatch(spot, d) {
 }
 export function defaultSpot() {
   return { board: ["Qs", "Jh", "2h"].map(cardId), pot: 5.5, eff: 97.5, rakePct: 0, rakeCap: 0,
-    ranges: [PRESETS["BB defend vs late open"], PRESETS["Open BTN"]], names: ["BB", "BTN"],
+    ranges: ["", ""], names: ["BB", "BTN"],
     sizes: TREES.quick.slice(), acc: 0.5, maxIt: 1000, allinT: 1.5, forceT: 0.15, note: "" };
 }
+// fill in anything missing (a lobby's saved setup can hold only the fields someone edited)
+export function normalizeSpot(sp) {
+  const d = defaultSpot(), o = { ...d, ...(sp || {}) };
+  for (const k of ["ranges", "names", "sizes"]) o[k] = d[k].map((v, i) => (Array.isArray(o[k]) && typeof o[k][i] === "string" ? o[k][i] : v));
+  if (!Array.isArray(o.board) || o.board.some(c => !(c >= 0 && c < 52))) o.board = d.board;
+  for (const k of ["pot", "eff", "rakePct", "rakeCap", "acc", "maxIt", "allinT", "forceT"]) if (!Number.isFinite(+o[k])) o[k] = d[k];
+  if (typeof o.note !== "string") o.note = "";
+  return o;
+}
 export function defaultShared() {
-  return { spot: defaultSpot(), link: null, sync: false, status: "idle", host: null, hostName: "", where: "", threads: 0,
+  return { spot: defaultSpot(), link: null, sync: true, status: "idle", host: null, hostName: "", where: "", threads: 0,
     prog: null, info: null, cards: null, solved: null, path: [{ hist: [], label: "Start" }], solveId: null, err: "", mem: 0 };
 }
 
 /* A spot recorded by the table (engine noteSpot) turned into solver setup. */
 export function spotFromTable(sp, P) {
   const r = (P && P.rules) || {};
-  const guess = guessRanges({ ...sp, pl: sp.pl });
   const street = { flop: "flop", turn: "turn", river: "river" }[sp.st];
   return {
     spot: { ...defaultSpot(), board: sp.board.map(cardId), pot: sp.pot, eff: Math.max(0.01, Math.min(...sp.pl.map(p => +p.stack || 0))),
-      rakePct: r.rakePct || 0, rakeCap: r.rakeCap || 0, ranges: guess.map(k => PRESETS[k]),
+      rakePct: r.rakePct || 0, rakeCap: r.rakeCap || 0,
       names: sp.pl.map(p => [p.pos, p.name].filter(Boolean).join(" · ").slice(0, 24)),
       sizes: (sp.board.length === 3 ? TREES.quick : TREES.standard).slice(),
-      note: `From the table: the ${street} of hand #${P ? P.hand : "?"}. Ranges are a starting guess (${guess[0]} vs ${guess[1]}); edit them to match your players.` },
+      note: `From the table: the ${street} of hand #${P ? P.hand : "?"}, ${sp.pl.map(p => p.pos).join(" vs ")}. Set both ranges with “Load a starting range” or by painting the grid.` },
     link: { hand: P ? P.hand : 0, st: sp.st, seats: sp.pl.map(p => p.i) },
   };
 }
@@ -362,7 +370,7 @@ export function createSolver(root, opt = {}) {
     if (!(p > 0)) throw "The pot must be more than $0.";
     if (!(e > 0)) throw "The effective stack must be more than $0.";
     const rs = s.ranges.map(parseRange);
-    rs.forEach((r, k) => { if (r.err) throw `${k ? "In position" : "Out of position"} range: ${r.err}`; if (!comboCount(r.w)) throw `The ${k ? "in position" : "out of position"} range is empty.`; });
+    rs.forEach((r, k) => { if (r.err) throw `${k ? "In position" : "Out of position"} range: ${r.err}`; if (!comboCount(r.w)) throw `Set the ${k ? "in-position" : "out-of-position"} range first: choose “Load a starting range” or paint the grid.`; });
     const cap = +s.rakeCap, z = s.sizes;
     return { oop: formatRange(rs[0].w), ip: formatRange(rs[1].w), board: s.board.slice(), pot: p, eff: e,
       rake: Math.max(0, Math.min(25, +s.rakePct || 0)) / 100, rakeCap: cap > 0 ? Math.round(cap * 100) : 1e12,
@@ -627,7 +635,7 @@ export function createSolver(root, opt = {}) {
     const c = t.dataset.svcmd;
     if (c === "explore") { explore = true; myPath = curPath().slice(); render(); }
     else if (c === "rejoin") { explore = false; myPath = null; render(); }
-    else if (c === "follow") { if (canEdit()) patch({ sync: !sv.sync }); }
+    else if (c === "follow") { if (canEdit()) { patch({ sync: !sv.sync }); autoKey = ""; if (lastP) tableUpdate(lastP); } }
     else if (c === "app") connectApp(false);
     else if (c === "browser") { if (engine && engine.kind === "app") { engine.close(); engine = null; lsSet("hsp-app", "0"); } render(); }
   });
@@ -639,9 +647,9 @@ export function createSolver(root, opt = {}) {
         ? `<span class="note">You're exploring on your own.</span><button class="b sm" type="button" data-svcmd="rejoin">Rejoin the group</button>`
         : `<button class="b sm" type="button" data-svcmd="explore">Explore on my own</button>`);
     }
-    if (sv.link && (TB || shared)) {
-      const P = TB && TB.current(), live = P && P.hand === sv.link.hand;
-      bits.push(`<label class="toggle sm"><input type="checkbox" data-svcmd="follow"${sv.sync ? " checked" : ""}${canEdit() ? "" : " disabled"}><span>Follow the table${live ? "" : ` <span class="muted">(hand #${sv.link.hand} is over)</span>`}</span></label>`);
+    if (TB) {
+      const P = TB.current(), live = !sv.link || (P && P.hand === sv.link.hand);
+      bits.push(`<label class="toggle sm"><input type="checkbox" data-svcmd="follow"${sv.sync ? " checked" : ""}${canEdit() ? "" : " disabled"}><span>Follow the table${live ? "" : ` <span class="muted">(this solve is from hand #${sv.link.hand})</span>`}</span></label>`);
     }
     setHTML($("bar"), bits.join(""));
     $("bar").hidden = !bits.length;
@@ -722,9 +730,25 @@ export function createSolver(root, opt = {}) {
     }
     return path;
   }
-  let lastP = null;
+  let lastP = null, autoKey = "";
+  // While following the table, a teacher's screen copies each new street (board, pot, stacks,
+  // positions) into the setup, unless a solve is running or ready. Ranges stay as they are.
+  function autoLoad(P) {
+    if (!TB || !TB.canPush() || !sv.sync || !P) return;
+    const spots = P.spots || [], sp = spots[spots.length - 1];
+    if (!sp) return;
+    const key = P.hand + "|" + spots.length;
+    if (key === autoKey) return;
+    autoKey = key;
+    if (sp.pl.length !== 2 || ["ready", "solving", "setting"].includes(sv.status)) return;
+    if (sv.link && sv.link.hand === P.hand && sv.link.st === sp.st) return;
+    const x = spotFromTable(sp, P);
+    patch({ spot: { ...x.spot, ranges: sv.spot.ranges.slice(), sizes: sv.spot.sizes.slice(), acc: sv.spot.acc, maxIt: sv.spot.maxIt },
+      link: x.link, status: "idle", host: null, solveId: null, cards: null, solved: null, info: null, err: "", path: [{ hist: [], label: "Start" }] });
+  }
   function tableUpdate(P) {
     lastP = P;
+    autoLoad(P);
     if (!sv.link || !sv.sync || sv.status !== "ready" || !P || P.hand !== sv.link.hand) { if (tablePath) { tablePath = null; tableKey = ""; render(); } return; }
     const key = sv.solveId + "|" + JSON.stringify([P.board, P.line]);
     if (key === tableKey) return;
@@ -735,8 +759,8 @@ export function createSolver(root, opt = {}) {
   /* ---------- lobby messages ---------- */
   function onMessage(m) {
     if (m.t === "sv") {
-      if (m.full) { const f = m.full; if (f.solveId !== sv.solveId) { cache.clear(); node = null; nodeKey = ""; } sv = { ...defaultShared(), ...f }; tablePath = null; tableKey = ""; if (lastP) tableUpdate(lastP); render(); }
-      else if (m.p) { patch(m.p, true); if (lastP) tableUpdate(lastP); }
+      if (m.full) { const f = m.full; if (f.solveId !== sv.solveId) { cache.clear(); node = null; nodeKey = ""; } sv = { ...defaultShared(), ...f, spot: normalizeSpot(f.spot) }; tablePath = null; tableKey = ""; if (lastP) tableUpdate(lastP); render(); }
+      else if (m.p) { if (m.p.spot) m.p.spot = normalizeSpot(m.p.spot); patch(m.p, true); if (lastP) tableUpdate(lastP); }
       else if (m.sp) { applySpotPatch(sv.spot, m.sp); render(); }
       return;
     }
@@ -771,7 +795,7 @@ export function createSolver(root, opt = {}) {
     onMessage, tableUpdate,
     get state() { return sv; },
     setFull(full) { onMessage({ t: "sv", full }); },
-    loadTableSpot(sp, P) { if (!canEdit()) return; const x = spotFromTable(sp, P); patch({ ...defaultShared(), spot: x.spot, link: x.link, sync: true }); explore = false; myPath = null; selCell = null; },
+    loadTableSpot(sp, P) { if (!canEdit()) return; const x = spotFromTable(sp, P); patch({ ...defaultShared(), spot: { ...x.spot, ranges: sv.spot.ranges.slice(), sizes: sv.spot.sizes.slice() }, link: x.link, sync: true }); autoKey = P.hand + "|" + (P.spots || []).length; explore = false; myPath = null; selCell = null; },
     loadSpot(spot) { patch({ spot: { ...defaultSpot(), ...spot } }); },
     refresh: render,
   };
