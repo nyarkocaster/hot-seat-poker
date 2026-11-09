@@ -22,6 +22,12 @@
     <span class="chip" id="connChip"><span class="dot" id="connDot"></span><span id="connTxt">Starting…</span></span>
     <span class="chip" id="stakeChip" hidden>$1/$2 NLHE</span>
     <span class="spacer"></span>
+    <span class="toolsw" id="toolsWrap" hidden><button class="b sm" type="button" id="toolsBtn" aria-expanded="false" aria-controls="toolsMenu">Tools</button>
+      <span class="toolsmenu" id="toolsMenu" hidden role="group" aria-label="Study tools">
+        <label class="toggle sm"><input type="checkbox" data-tool="odds"><span>Odds calculator <span class="muted">· pot odds, outs and EV, with the math</span></span></label>
+        <label class="toggle sm"><input type="checkbox" data-tool="stove"><span>Poker stove <span class="muted">· equity of hands and ranges</span></span></label>
+        <span class="note">Only you see these. Turn them off here too.</span>
+      </span></span>
     <span class="seg" id="viewSwitch" role="group" aria-label="Show" hidden><button type="button" data-view-mode="table" aria-pressed="true">Table</button><button type="button" data-view-mode="both" aria-pressed="false">Side by side</button><button type="button" data-view-mode="solver" aria-pressed="false">Solver</button></span>
     <button class="b sm" type="button" id="dockReset" hidden title="Put every panel back in its starting place">Reset layout</button>
     <a class="b sm" href="/learn/" target="_blank" rel="noopener">How it works</a>
@@ -60,6 +66,8 @@
       <div class="table" id="table" data-anc="table" aria-label="Poker table"></div>
       <div class="panel" id="actPanel" data-anc="act"></div>
       <div class="panel" id="solvePanel" hidden></div>
+      <div class="panel tool" id="oddsPanel" data-anc="odds" hidden></div>
+      <div class="panel tool" id="stovePanel" data-anc="stove" hidden></div>
       <div class="panel" id="logPanel" data-anc="log"><h2>Hand log</h2><ul class="log" id="log"></ul></div>
     </div>
     <aside id="side" data-anc="side"></aside>
@@ -68,6 +76,7 @@
   </div>
 </div>
 <div class="modal" id="modal" hidden></div>
+<aside class="pollcard" id="pollCard" hidden aria-live="polite"></aside>
 <div id="curLayer" aria-hidden="true"></div>
 <script type="module" src="/app.js"></script>
 </body>
