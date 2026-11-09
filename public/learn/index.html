@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>How it works · Hot Seat Poker</title>
+<meta name="description" content="How to run a Hot Seat Poker lobby: start a table, set the cards, play hands with students, and study spots in the solver.">
+<script>try{var t=localStorage.getItem("hsp-theme");document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){}</script>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<div class="site">
+  <nav class="nav" aria-label="Site">
+    <a class="brand" href="/">Hot Seat Poker</a>
+    <a href="/learn/" aria-current="page">How it works</a>
+    <a href="/solver/">Solver</a>
+    <a class="b primary" href="/play/">Open the table</a>
+  </nav>
+
+  <div class="guide">
+    <aside class="toc" aria-label="On this page">
+      <ol>
+        <li><a href="#start">Start a lobby</a></li>
+        <li><a href="#students">Bring in students</a></li>
+        <li><a href="#setup">Set up the table</a></li>
+        <li><a href="#cards">Choose the cards</a></li>
+        <li><a href="#play">Play a hand</a></li>
+        <li><a href="#teaching">Teaching tools</a></li>
+        <li><a href="#solver">Study a spot in the solver</a></li>
+        <li><a href="#app">Big solves</a></li>
+        <li><a href="#student">For students</a></li>
+        <li><a href="#questions">Questions</a></li>
+      </ol>
+    </aside>
+
+    <article class="doc">
+      <h1>How it works</h1>
+      <p class="lede">Hot Seat Poker is a live table for teaching. The teacher controls the cards and the game; students sit in seats and make their own decisions. This guide walks through a study session from start to finish.</p>
+      <div class="tip">Want to look around first? On the table page, choose <span class="ui">Open practice table</span>. It runs on your device only, with every seat yours to play.</div>
+
+      <h2 id="start">Start a lobby</h2>
+      <p>A lobby is one table that stays open between sessions. Its cards, stacks and settings are saved, so you can pick up next week where you stopped.</p>
+      <ol class="steps">
+        <li>Open <a href="/play/">the table</a> and type your name under <b>You</b>.</li>
+        <li>Under <b>Start a lobby</b>, give it a name your students will recognize, like “Tuesday study group”.</li>
+        <li>Choose a <b>teacher code</b>. Anyone with this code can see every card and run the table, so share it only with co-teachers. Write it down: there is no way to recover it.</li>
+        <li>Press <span class="ui">Create lobby</span>. You're now at the table as a teacher.</li>
+      </ol>
+      <p>Next time, this browser remembers your code: press <span class="ui">Rejoin as teacher</span> next to the lobby. On another device, press <span class="ui">Teach</span> and enter the code.</p>
+
+      <h2 id="students">Bring in students</h2>
+      <p>Students need only the lobby's name. They open hotseatpoker.com/play, type their name, press <span class="ui">Join as student</span> on your lobby, and tap an open seat. The <b>People</b> tab on your side panel also has a direct link to paste into a group chat.</p>
+      <p>Co-teachers press <span class="ui">Teach</span> on the lobby and enter the teacher code. You'll see each other's pointers, and a colored outline shows what the other teacher is editing.</p>
+
+      <h2 id="setup">Set up the table</h2>
+      <p>Everything about the game lives in the <b>Table setup</b> tab:</p>
+      <ul>
+        <li><b>Seats, blinds and stacks.</b> Pick 2 to 9 seats, set the small and big blind, and use <span class="ui">Set every stack to</span> to reset everyone at once. Individual stacks and names are on the <b>Seats</b> tab.</li>
+        <li><b>Antes.</b> Everyone antes, or a big blind ante.</li>
+        <li><b>Straddle and bomb pots.</b> A straddle every hand, or just the next hand from the action bar. A bomb pot sends everyone straight to the flop for a set amount.</li>
+        <li><b>Rake.</b> A percentage with an optional cap, and “no flop, no drop” if your room plays it.</li>
+        <li><b>All-ins and timing.</b> Run it twice when players are all in, and an optional shot clock. When time runs out the player checks if they can, otherwise folds.</li>
+      </ul>
+      <p>Use <span class="ui">Sit out</span> on the Seats tab for an empty chair, and <span class="ui">Button here</span> to move the button between hands.</p>
+
+      <h2 id="cards">Choose the cards</h2>
+      <p>This is the heart of teaching with Hot Seat Poker: set up exactly the hand you want to discuss.</p>
+      <ol class="steps">
+        <li>Between hands, click any card slot, on the table or in the Seats tab. A card picker opens.</li>
+        <li>Pick cards for that player, then move to the next slot. <span class="ui">Random card</span> fills a slot from the deck; <span class="ui">Clear slot</span> leaves it for the deal.</li>
+        <li>Board cards work the same way. Turn and river cards you set show faded until that street is dealt.</li>
+        <li>Any slot you leave empty is dealt at random when you deal.</li>
+      </ol>
+      <p>During a hand you can still change a card: the picker swaps it in place. To replay the same hole cards, turn on <b>Keep my card setup for the next hand</b> in Table setup.</p>
+
+      <h2 id="play">Play a hand</h2>
+      <ol class="steps">
+        <li>Press <span class="ui">Deal hand</span>.</li>
+        <li>When it's a student's turn, they act from their own screen. When it's an empty seat's turn, you act for it. You can also act for any seat to keep things moving.</li>
+        <li>Choose a size with the slider or the pot-size buttons, then <span class="ui">Bet</span> or <span class="ui">Raise</span>. <span class="ui">+30s</span> gives a player more time when the shot clock is on.</li>
+        <li>At showdown the pot is paid out, rake is taken if it's on, and the hand log records everything.</li>
+      </ol>
+      <p>Made a mistake? <span class="ui">Undo</span> steps back one action at a time. <span class="ui">Cancel this hand</span> (in Table setup) returns every chip to where it was before the deal.</p>
+
+      <h2 id="teaching">Teaching tools</h2>
+      <dl>
+        <dt>Reveal all cards</dt>
+        <dd>Shows every hand to the students, folded hands too. Press it again to hide them.</dd>
+        <dt>Keep my card setup</dt>
+        <dd>Deals the same hole cards again next hand, so students can try a different line with the same holding.</dd>
+        <dt>Students can open the solver</dt>
+        <dd>Never, between hands only, or any time. “Between hands” keeps students from checking the answer in the middle of a decision.</dd>
+      </dl>
+
+      <h2 id="solver">Study a spot in the solver</h2>
+      <p>The solver works out the strongest strategy for both players in a heads-up spot after the flop: how often each hand should check, bet, call, raise or fold.</p>
+      <ol class="steps">
+        <li>Play a hand to the flop with two players left. A <b>Solver</b> panel appears under the action bar.</li>
+        <li>Press <span class="ui">Open the flop in the solver</span> (or the turn or river). The window switches to <b>Side by side</b>, with the board, pot, stacks and positions filled in. Use the <b>Table / Side by side / Solver</b> switch at the top any time.</li>
+        <li>Check the ranges. They start as a guess from the preflop action, such as a button open against a big blind defend. Load a different starting range, type a range like <kbd>QQ+,AK,A5s</kbd>, or paint the 13×13 grid.</li>
+        <li>Pick bet sizes. <b>Quick</b> uses one bet size per street and no raises; <b>Standard</b> adds raises. Both run in the browser.</li>
+        <li>Press <span class="ui">Solve</span>. A flop usually takes a few seconds to a minute.</li>
+      </ol>
+      <h3>Reading the answer</h3>
+      <p>The buttons across the top are the actions available, with how often the whole range takes each one. The grid shows every starting hand: the colors split each hand by action, and the height of the fill shows how much of that hand is still in the range. Tap a hand to see each combination with its equity and expected value. Click an action button to see what happens next, and use the trail above to go back.</p>
+      <h3>Following the table</h3>
+      <p>While <b>Follow the table</b> is on, the solver moves along with the real hand: checks and bets at the table move it down the matching line, using the closest bet size. When you pick the turn or river in the solver, the table deals that card next, as long as nobody is holding it.</p>
+      <h3>Studying together</h3>
+      <p>The solver is shared with everyone in the lobby who's allowed to see it. Anyone can edit the ranges and sizes, and everyone moves through the answer together. Press <span class="ui">Explore on my own</span> to look around without moving anyone else, and <span class="ui">Rejoin the group</span> to come back. Only the computer that pressed Solve does the work, so students on phones can follow along easily.</p>
+      <div class="tip">Keep the page open on the computer that pressed Solve until you're done reviewing. If it leaves, the results go with it, and someone needs to press Solve again.</div>
+
+      <h2 id="app">Big solves</h2>
+      <p>A browser can only use about 4 GB of memory. Turn and river spots and Quick or Standard flops fit easily. Flops with several bet sizes or very wide ranges can need more, and the solver tells you when that happens.</p>
+      <p>For those, install the free <a href="/solver/app.html">Hot Seat Solver app</a> on your Windows computer. It runs the solve with all of your computer's memory and speed, and everyone in your lobby sees the results as usual. Open it, leave its window open, then press <span class="ui">Connect the solver app</span> under the Solve button. If Chrome asks whether the site can access devices on your network, choose Allow.</p>
+
+      <h2 id="student">For students</h2>
+      <ol class="steps">
+        <li>Open hotseatpoker.com/play (or the link your teacher sent) and type your name.</li>
+        <li>Press <span class="ui">Join as student</span> on your group's lobby, then tap an open seat.</li>
+        <li>When it's your turn, your action buttons appear under the table. Only you and the teachers can see your cards.</li>
+        <li>If your teacher allows it, the <b>Solver</b> and <b>Side by side</b> views appear at the top. You can follow the group or explore on your own.</li>
+      </ol>
+      <p>Reloading the page or switching apps on your phone is fine: you'll come back to the same seat.</p>
+
+      <h2 id="questions">Questions</h2>
+      <dl>
+        <dt>Does it cost anything?</dt>
+        <dd>No. There are no accounts, and solves run on your own computers.</dd>
+        <dt>I lost the teacher code.</dt>
+        <dd>It can't be recovered. If a browser that used it is still around, it can press Rejoin as teacher. Otherwise start a new lobby.</dd>
+        <dt>How do I delete a lobby?</dt>
+        <dd>On the table page, press Teach on the lobby, enter the teacher code, and choose Delete this lobby.</dd>
+        <dt>Does it work on phones?</dt>
+        <dd>Yes, for students and for viewing the solver. Running big solves works best on a laptop or desktop.</dd>
+        <dt>Is the solver the same as the paid ones?</dt>
+        <dd>It uses postflop-solver, an open-source engine by Wataru Inariba that solves to the same kind of equilibrium. It handles two players after the flop; preflop and multiway spots aren't supported.</dd>
+      </dl>
+    </article>
+  </div>
+
+  <footer class="foot">
+    Solver engine: <a href="https://github.com/b-inary/postflop-solver" target="_blank" rel="noopener">postflop-solver</a> by Wataru Inariba (GNU AGPL v3).
+    Source code: <a href="https://github.com/nyarkocaster/hot-seat-poker" target="_blank" rel="noopener">github.com/nyarkocaster/hot-seat-poker</a>.
+  </footer>
+</div>
+</body>
+</html>
