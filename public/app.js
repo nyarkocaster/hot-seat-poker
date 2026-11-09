@@ -351,7 +351,7 @@ function renderTeacherSide(){
       ${confirmReset?`<span class="confirm"><span>Reset table, stacks and log?</span><button class="b sm warn" type="button" data-cmd="reset">Reset</button><button class="b sm" type="button" data-cmd="noreset">Keep</button></span>`:`<button class="b warn" type="button" data-cmd="askreset">Reset table…</button>`}</div></div></div>`;
   } else {
     h+=`<div class="students" id="stuList"></div>
-      ${local?"":`<p class="note">Students open this site, pick <b>${esc(G.lname||L.name)}</b> from the lobby list, and tap an open seat. Or send them this link: <b>${esc(location.origin)}/#lobby-${esc(L.id)}</b>. Co-teachers join with the teacher code; you'll see each other's pointers, and a colored outline marks whatever another teacher is editing.</p>`}`;
+      ${local?"":`<p class="note">Students open <b>${esc(location.host)}/play</b>, pick <b>${esc(G.lname||L.name)}</b> from the lobby list, and tap an open seat. Or send them this link: <b>${esc(location.origin)}/play/#lobby-${esc(L.id)}</b>. Co-teachers join with the teacher code; you'll see each other's pointers, and a colored outline marks whatever another teacher is editing.</p>`}`;
   }
   h+=`</div>`;
   setSide(h); renderPeople();
