@@ -14,10 +14,10 @@ a.b.primary{color:#fff}
 
 /* hero: the felt, with the name printed on it */
 .hero{padding:10px 0 40px}
-.felt-table{position:relative;aspect-ratio:2.05/1;max-width:1040px;margin:0 auto;container-type:inline-size}
-.felt-table .rail{position:absolute;inset:0;border-radius:50%/50%;background:var(--rail);box-shadow:0 18px 50px rgba(0,0,0,.35),inset 0 0 0 2px rgba(255,255,255,.04)}
-.felt-table .felt{position:absolute;inset:3.2cqw;border-radius:50%/50%;background:radial-gradient(ellipse at 50% 42%,#226148 0%,var(--felt) 52%,var(--felt-edge) 100%);box-shadow:inset 0 0 40px rgba(0,0,0,.35)}
-.felt-table .line{position:absolute;inset:8.5cqw;border-radius:50%/50%;border:1.5px solid rgba(233,243,236,.16)}
+.felt-table{position:relative;aspect-ratio:2.15/1;max-width:1040px;margin:0 auto;container-type:inline-size}
+.felt-table .rail{position:absolute;inset:0;border-radius:999px;background:var(--rail);box-shadow:0 18px 50px rgba(0,0,0,.35),inset 0 0 0 2px rgba(255,255,255,.04)}
+.felt-table .felt{position:absolute;inset:3.2cqw;border-radius:999px;background:radial-gradient(ellipse at 50% 42%,#226148 0%,var(--felt) 52%,var(--felt-edge) 100%);box-shadow:inset 0 0 40px rgba(0,0,0,.35)}
+.felt-table .line{position:absolute;inset:8.5cqw;border-radius:999px;border:1.5px solid rgba(233,243,236,.16)}
 .printed{position:absolute;left:50%;top:21%;transform:translateX(-50%);text-align:center;color:rgba(233,243,236,.9);width:62%}
 .printed h1{font-family:var(--f-display);font-weight:700;font-size:max(30px,6.6cqw);line-height:.95;letter-spacing:.06em;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.25)}
 .printed p{font-size:max(14px,1.75cqw);margin:1.2cqw 0 0;color:rgba(233,243,236,.75);line-height:1.4}
@@ -36,7 +36,7 @@ a.b.primary{color:#fff}
   .hero-board .pc.deal:nth-child(2){animation-delay:.12s}.hero-board .pc.deal:nth-child(3){animation-delay:.24s}
   @keyframes deal{from{opacity:0;transform:translate(-30cqw,-14cqw) rotate(-25deg)}to{opacity:1;transform:none}}
 }
-@media (max-width:640px){.hplate{display:none}.felt-table{aspect-ratio:1.3/1}.printed{top:15%;width:80%}.printed p{font-size:13px;margin-top:6px}.hero-board{top:73%}}
+@media (max-width:640px){.hplate{display:none}.felt-table{aspect-ratio:1.55/1}.printed{top:13%;width:84%}.printed p{font-size:13px;margin-top:6px}.hero-board{top:74%}}
 
 /* body sections: plain, left aligned */
 .what{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:44px 64px;padding:36px 0 20px;border-top:1px solid var(--line)}
