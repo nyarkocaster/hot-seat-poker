@@ -37,7 +37,7 @@ export function cmp(a,b){for(let i=0;i<Math.max(a.length,b.length);i++){const d=
 
 /* ---------- game options ---------- */
 export function defaultRules(){
-  return {anteType:"none",ante:1,straddle:false,straddleAmt:4,rakePct:0,rakeCap:5,nfnd:true,rit:false,clock:0,bombAmt:5,solverStudents:"between"};
+  return {anteType:"none",ante:1,straddle:false,straddleAmt:4,rakePct:0,rakeCap:5,nfnd:true,rit:false,clock:0,bombAmt:5,solverStudents:"between",stoveStudents:"between"};
 }
 const CLOCKS=[0,15,20,30,45,60,90,120];
 function setRule(r,k,v){
@@ -54,6 +54,7 @@ function setRule(r,k,v){
     case "clock": if(!CLOCKS.includes(n)) return false; r.clock=n; return true;
     case "bombAmt": r.bombAmt=Math.max(1,Math.min(100000,n)); return true;
     case "solverStudents": if(!["off","between","always"].includes(v)) return false; r.solverStudents=v; return true;
+    case "stoveStudents": if(!["off","between","always"].includes(v)) return false; r.stoveStudents=v; return true;
   }
   return false;
 }
@@ -326,7 +327,7 @@ export function createEngine(opts={}){
     const r=G.rules;
     return {v:3,lname:G.lname,size:G.size,blinds:G.blinds,hand:G.hand,button:G.button,phase:G.phase,toAct:G.toAct,turn:G.turn,curBet:G.curBet,minRaise:G.minRaise,
       board:G.board,board2:G.board2,result:G.result,log:G.log.slice(-50),reveal:!!G.revealAll,deadline:G.deadline,
-      rules:{anteType:r.anteType,ante:r.ante,straddle:r.straddle,straddleAmt:r.straddleAmt,rakePct:r.rakePct,rakeCap:r.rakeCap,nfnd:r.nfnd,rit:r.rit,clock:r.clock,bombAmt:r.bombAmt,solverStudents:r.solverStudents||"between"},spots:G.spots||[],line:G.line||[],
+      rules:{anteType:r.anteType,ante:r.ante,straddle:r.straddle,straddleAmt:r.straddleAmt,rakePct:r.rakePct,rakeCap:r.rakeCap,nfnd:r.nfnd,rit:r.rit,clock:r.clock,bombAmt:r.bombAmt,solverStudents:r.solverStudents||"between",stoveStudents:r.stoveStudents||"between"},spots:G.spots||[],line:G.line||[],
       straddleNext:G.straddleNext,bombNext:G.bombNext,bomb:G.bomb,handRake:G.handRake,
       seats:G.seats.map(s=>({name:s.name,stack:s.stack,uid:s.uid,out:s.out,bet:s.bet,total:s.total,folded:s.folded,allin:s.allin,has:!!s.cards,
         cards:(s.cards&&(G.revealAll||s.shown))?s.cards:null}))};
