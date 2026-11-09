@@ -1,7 +1,5 @@
-# The solver page needs cross-origin isolation so it can use several CPU threads.
-/solver
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
-/solver/*
+# Cross-origin isolation lets the solver use several CPU threads. It's on for the whole site
+# because the solver also runs inside the table page.
+/*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
