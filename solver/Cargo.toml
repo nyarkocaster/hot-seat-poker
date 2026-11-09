@@ -1,0 +1,29 @@
+[package]
+name = "hsp_solver"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Hot Seat Poker's in-browser postflop solver: a thin WebAssembly wrapper around b-inary/postflop-solver"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# The solver engine by Wataru Inariba (AGPL-3.0-or-later), pinned to a known commit.
+postflop-solver = { git = "https://github.com/b-inary/postflop-solver", rev = "9d1509fe5077d019825f833eed04b16d342dfda1", default-features = false }
+wasm-bindgen = "=0.2.100"
+js-sys = { version = "0.3.77", optional = true }
+rayon = { version = "1.10", optional = true }
+spmc = { version = "0.3", optional = true }
+
+[features]
+default = []
+# Multi-threaded browser build (needs nightly, atomics and a cross-origin isolated page).
+mt = ["postflop-solver/rayon", "dep:rayon", "dep:spmc", "dep:js-sys"]
+# Faster allocator used by the browser builds (needs nightly).
+custom-alloc = ["postflop-solver/custom-alloc"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
