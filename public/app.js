@@ -165,11 +165,17 @@ function mountSolver(){
   SV=createSolver(root,{transport,anchors:mode==="lobby",table:{current:()=>view(),canPush:()=>isT(),push:(k,card)=>{if(E.G&&E.used().has(card)){flash(`${pretty(card)} is in a player's hand, so the table can't deal it`);return false}sendOp({t:"pick",kind:"board",k,card});flash(`${k===3?"Turn":"River"} set to ${pretty(card)} on the table`);return true}}});
   const tbl={current:()=>view(),mySeat:()=>mySeat,myCards:()=>isT()?null:(MINE&&PUB&&MINE.hand===PUB.hand?MINE.cards:null),isTeacher:()=>isT()};
   ODDS=createOdds($("#oddsPanel"),{table:tbl});
-  STOVE=createStove($("#stovePanel"),{table:tbl,solver:()=>SV,odds:()=>TOOLS.odds?ODDS:null,flash});
+  STOVE=createStove($("#stovePanel"),{table:tbl,solver:()=>solverAllowed()?SV:null,odds:()=>TOOLS.odds?ODDS:null,flash});
   NB=createNotes($("#notesPanel"),{transport:mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},canEdit:()=>isT()||svOn}:null,table:{current:()=>view()},solver:()=>SV,flash});
   svOn=mode==="local";
 }
 const solverAllowed=()=>!!mode&&(isT()||svOn);
+// the poker stove: teachers always; students per the table setting (never / between hands / any time)
+function stoveAllowed(){
+  if(!mode) return false; if(isT()||mode==="local") return true;
+  const P=view(), w=(P&&P.rules&&P.rules.stoveStudents)||"between";
+  return w==="always"||(w==="between"&&!!P&&(P.phase==="idle"||P.phase==="done"));
+}
 function setView(v){viewMode=v;lsSet("hsp-view",v);render()}
 function applyView(){
   const ok=solverAllowed(), v=ok?viewMode:"table";
@@ -177,7 +183,10 @@ function applyView(){
   $("#solverPane").hidden=!mode||v==="table";
   const sw=$("#viewSwitch"); sw.hidden=!ok;
   sw.querySelectorAll("[data-view-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.viewMode===v)));
-  $("#oddsPanel").hidden=!mode||!TOOLS.odds; $("#stovePanel").hidden=!mode||!TOOLS.stove;
+  const stoveOk=stoveAllowed();
+  $("#oddsPanel").hidden=!mode||!TOOLS.odds; $("#stovePanel").hidden=!mode||!TOOLS.stove||!stoveOk;
+  const sc=document.querySelector('[data-tool="stove"]'); if(sc) sc.disabled=!stoveOk;
+  const sn=$("#stoveNote"); if(sn){const w=(view()&&view().rules&&view().rules.stoveStudents)||"between"; sn.textContent=stoveOk?"":w==="off"?" · your teacher has it turned off":" · opens between hands";}
   $("#toolsWrap").hidden=!mode;
   document.querySelectorAll("[data-tool]").forEach(x=>{x.checked=!!TOOLS[x.dataset.tool]});
   DOCK.set(mode&&v!=="table"?v:null);
@@ -466,7 +475,8 @@ function renderTeacherSide(){
       <p class="note">When time runs out the player checks if they can, otherwise folds.</p></div>
     <div class="group"><h3>Teaching</h3>
       <div class="row">${revealBtn()}<span class="note">Shows every hand to students, folded ones too.</span></div>
-      <div class="fields" style="margin-top:8px"><div class="field" style="grid-column:1/-1"><label for="solverSel">Students can open the solver</label><select id="solverSel" data-rule="solverStudents">${[["off","Never (teachers only)"],["between","Between hands"],["always","Any time, even mid-hand"]].map(([v,l])=>`<option value="${v}"${(r.solverStudents||"between")===v?" selected":""}>${l}</option>`).join("")}</select></div></div>
+      <div class="fields" style="margin-top:8px"><div class="field" style="grid-column:1/-1"><label for="solverSel">Students can open the solver</label><select id="solverSel" data-rule="solverStudents">${[["off","Never (teachers only)"],["between","Between hands"],["always","Any time, even mid-hand"]].map(([v,l])=>`<option value="${v}"${(r.solverStudents||"between")===v?" selected":""}>${l}</option>`).join("")}</select></div>
+        <div class="field" style="grid-column:1/-1"><label for="stoveSel">Students can use the poker stove</label><select id="stoveSel" data-rule="stoveStudents">${[["off","Never (teachers only)"],["between","Between hands"],["always","Any time, even mid-hand"]].map(([v,l])=>`<option value="${v}"${(r.stoveStudents||"between")===v?" selected":""}>${l}</option>`).join("")}</select></div></div>
       <label class="toggle"><input type="checkbox" id="keepSetup"${G.keepSetup?" checked":""}><span>Keep my card setup for the next hand<br><span class="note">Replays the same hole cards so students can try other lines. Board cards you set are used once.</span></span></label>
       <div class="row" style="margin-top:8px">${!between()?`<button class="b" type="button" data-cmd="voidhand">Cancel this hand</button>`:""}
       ${confirmReset?`<span class="confirm"><span>Reset table, stacks and log?</span><button class="b sm warn" type="button" data-cmd="reset">Reset</button><button class="b sm" type="button" data-cmd="noreset">Keep</button></span>`:`<button class="b warn" type="button" data-cmd="askreset">Reset table…</button>`}</div></div></div>`;
