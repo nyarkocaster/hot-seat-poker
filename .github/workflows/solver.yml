@@ -1,0 +1,78 @@
+# Compiles the solver (solver/) to WebAssembly and commits the result to public/solver/pkg-*.
+# Runs whenever the solver code or this file changes, or by hand from the Actions tab.
+name: Build solver
+
+on:
+  push:
+    branches: [main]
+    paths: ["solver/**", ".github/workflows/solver.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-solver
+  cancel-in-progress: true
+
+env:
+  NIGHTLY: nightly-2025-03-01
+  WASM_BINDGEN: "0.2.100"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly with the WebAssembly target
+        run: |
+          rustup toolchain install $NIGHTLY --profile minimal --component rust-src --target wasm32-unknown-unknown
+          rustup default $NIGHTLY
+
+      - name: Install wasm-bindgen and binaryen
+        run: |
+          curl -sSfL "https://github.com/rustwasm/wasm-bindgen/releases/download/$WASM_BINDGEN/wasm-bindgen-$WASM_BINDGEN-x86_64-unknown-linux-musl.tar.gz" | tar xz
+          sudo mv wasm-bindgen-$WASM_BINDGEN-x86_64-unknown-linux-musl/wasm-bindgen /usr/local/bin/
+          wasm-bindgen --version
+          sudo apt-get update -qq && sudo apt-get install -y -qq binaryen || true
+
+      - name: Run the solver's tests
+        working-directory: solver
+        run: cargo test --release
+
+      - name: Build multi-threaded version (Chrome, Edge, Firefox)
+        working-directory: solver
+        env:
+          RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128 -C link-arg=--max-memory=4294967296"
+        run: |
+          cargo build --release --target wasm32-unknown-unknown --features mt,custom-alloc -Z build-std=panic_abort,std
+          rm -rf ../public/solver/pkg-mt
+          wasm-bindgen --target web --out-dir ../public/solver/pkg-mt target/wasm32-unknown-unknown/release/hsp_solver.wasm
+          if command -v wasm-opt >/dev/null; then
+            wasm-opt -O3 --enable-threads --enable-simd --enable-bulk-memory --enable-mutable-globals --enable-nontrapping-float-to-int --enable-sign-ext \
+              ../public/solver/pkg-mt/hsp_solver_bg.wasm -o opt.wasm && mv opt.wasm ../public/solver/pkg-mt/hsp_solver_bg.wasm || echo "wasm-opt skipped"
+          fi
+
+      - name: Build single-threaded version (Safari and fallback)
+        working-directory: solver
+        env:
+          RUSTFLAGS: "-C target-feature=+simd128"
+          CARGO_TARGET_DIR: target-st
+        run: |
+          cargo build --release --target wasm32-unknown-unknown --features custom-alloc
+          rm -rf ../public/solver/pkg-st
+          wasm-bindgen --target web --out-dir ../public/solver/pkg-st target-st/wasm32-unknown-unknown/release/hsp_solver.wasm
+          if command -v wasm-opt >/dev/null; then
+            wasm-opt -O3 --enable-simd --enable-bulk-memory --enable-mutable-globals --enable-nontrapping-float-to-int --enable-sign-ext \
+              ../public/solver/pkg-st/hsp_solver_bg.wasm -o opt.wasm && mv opt.wasm ../public/solver/pkg-st/hsp_solver_bg.wasm || echo "wasm-opt skipped"
+          fi
+
+      - name: Commit the built files
+        run: |
+          rm -f public/solver/pkg-*/.gitignore public/solver/pkg-*/package.json
+          ls -la public/solver/pkg-mt public/solver/pkg-st
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/solver/pkg-mt public/solver/pkg-st
+          git diff --cached --quiet && echo "No changes" || (git commit -m "Build solver WebAssembly" && git push)
