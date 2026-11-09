@@ -187,10 +187,24 @@ function renderNow(){
   if(picker&&!T) picker=null;
   drawPicker(); drawCursors(); tick();
 }
+/* the table is a racetrack (straight sides, round ends); seats, bets and the button sit on smaller
+   racetracks inside it. t runs 0..1 around the track, starting bottom centre and going left first.
+   Units are the table box (16 x 11, its aspect ratio); results are percentages. */
+const TW=16, TH=11;
+function track(t,cy,rx,ry){
+  const R=ry, L=Math.max(0,rx-ry), cx=TW/2, P=4*L+2*Math.PI*R;
+  let s=(((t%1)+1)%1)*P, x, y;
+  if(s<L){x=cx-s;y=cy+R}
+  else if((s-=L)<Math.PI*R){const th=Math.PI/2+s/R;x=cx-L+R*Math.cos(th);y=cy+R*Math.sin(th)}
+  else if((s-=Math.PI*R)<2*L){x=cx-L+s;y=cy-R}
+  else if((s-=2*L)<Math.PI*R){const th=-Math.PI/2+s/R;x=cx+L+R*Math.cos(th);y=cy+R*Math.sin(th)}
+  else{s-=Math.PI*R;x=cx+L-s;y=cy+R}
+  return {x:x/TW*100,y:y/TH*100};
+}
 function seatPos(i,P,T){
   const rot=T?0:(mySeat>=0?mySeat:0);
-  const k=(i-rot+P.size)%P.size; const a=Math.PI/2+k*2*Math.PI/P.size;
-  return {x:50+43*Math.cos(a),y:48+36*Math.sin(a),a};
+  const t=((i-rot+P.size)%P.size)/P.size;
+  return {...track(t,5.28,6.6,3.96),t};
 }
 function renderTable(P,T){
   const potCollected=P.seats.reduce((a,s)=>a+s.total-s.bet,0);
@@ -225,8 +239,8 @@ function renderTable(P,T){
       <div class="hole">${cards}</div>
       <div class="plate"><div class="nm">${esc(s.name)}</div><div class="stk">${money(s.stack)}</div>${tag?`<div class="tag">${tag}</div>`:""}
       ${showTake?`<button class="b sm" type="button" data-take="${i}">Take seat ${i+1}</button>`:""}</div></div>`;
-    if(s.bet>0){const bx=50+26*Math.cos(pos.a),by=47+24*Math.sin(pos.a);h+=`<div class="bet" style="left:${bx}%;top:${by}%">${money(s.bet)}</div>`}
-    if(i===P.button){const dx=50+33*Math.cos(pos.a+0.32),dy=47+30*Math.sin(pos.a+0.32);h+=`<div class="btnmark" style="left:${dx}%;top:${dy}%" aria-label="Dealer button">D</div>`}
+    if(s.bet>0){const b=track(pos.t,5.17,4.3,2.64);h+=`<div class="bet" style="left:${b.x}%;top:${b.y}%">${money(s.bet)}</div>`}
+    if(i===P.button){const d=track(pos.t+0.045,5.17,5.3,3.3);h+=`<div class="btnmark" style="left:${d.x}%;top:${d.y}%" aria-label="Dealer button">D</div>`}
   }
   setHTML($("#table"),h);
 }
