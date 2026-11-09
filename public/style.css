@@ -182,3 +182,78 @@ body.v-both .wrap{max-width:1900px}
 body.v-both #duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
 body.v-both #game{grid-template-columns:minmax(0,1fr)}
 @media (max-width:1100px){body.v-both #duo{grid-template-columns:minmax(0,1fr)}}
+/* movable panels (Side by side and Solver views, see dock.js) */
+body.docked #duo{display:block}
+body.docked #game,body.docked #solverPane{display:none!important}
+#dock{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}
+body.v-solver #dock{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}
+@media (max-width:1100px){#dock,body.v-solver #dock{grid-template-columns:minmax(0,1fr)}}
+.dcol{display:flex;flex-direction:column;gap:14px;min-height:140px;border-radius:12px;min-width:0}
+body.dragging,body.dragging *{cursor:grabbing!important;user-select:none;-webkit-user-select:none}
+body.dragging .dcol{outline:2px dashed var(--line);outline-offset:5px}
+.dk{background:var(--panel);border:1px solid var(--line);border-radius:12px;min-width:0}
+.dk:not(:has(> .dkb > :not([hidden]))){display:none}
+.dk-h{display:flex;align-items:center;gap:6px;padding:3px 4px;border-bottom:1px solid var(--line);cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:12px 12px 0 0}
+.dk-h:hover{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.dk.fold .dk-h{border-bottom:0;border-radius:12px}
+.dk.fold .dkb{display:none}
+.dk-grip,.dk-fold{border:0;background:none;color:var(--muted);font-size:15px;line-height:1;padding:5px 8px;border-radius:6px;cursor:inherit}
+.dk-fold{cursor:pointer;transition:transform .15s}
+.dk-grip:focus-visible,.dk-fold:focus-visible{outline:2px solid var(--brass);outline-offset:-2px}
+.dk.fold .dk-fold{transform:rotate(-90deg)}
+.dk-t{flex:1;font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.dkb{container-type:inline-size;display:flex;flex-direction:column;min-width:0}
+.dkb > .panel{border:0;border-radius:0 0 12px 12px;background:none}
+.dkb > .panel + .panel{border-top:1px solid var(--line);border-radius:0}
+.dk:not([data-dk=table]) .dkb > .panel > h2:first-child{display:none}
+.dkb > .table{width:auto;margin:24px 14px 30px}
+.dkb > #sv-bar{padding:10px 14px 0;margin:0}
+.dkb > aside > .panel{border:0;border-radius:0;background:none}
+.dkb > aside > .panel + .panel{border-top:1px solid var(--line)}
+.dkb .rc{font-size:clamp(8px,2.4cqw,12px)}
+.dkb .rgrid.res .rc{font-size:clamp(8px,1.9cqw,12px)}
+.dk.lift{box-shadow:0 18px 50px rgba(0,0,0,.45);opacity:.96}
+.dk-ph{border:2px dashed var(--brass);border-radius:12px;background:color-mix(in srgb,var(--brass) 10%,transparent);flex:none}
+
+/* notes: a browser-style window with a tab per street (see notes.js) */
+.nbwin{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.nbstrip{display:flex;align-items:flex-end;gap:2px;padding:6px 6px 0;background:color-mix(in srgb,var(--bg) 70%,var(--line));border-bottom:1px solid var(--line)}
+.nbtabs{display:flex;align-items:flex-end;gap:0;min-width:0;flex:0 1 auto;overflow-x:auto;scrollbar-width:thin}
+.nbtab{position:relative;display:flex;align-items:center;gap:4px;height:34px;width:150px;min-width:64px;flex:0 1 150px;padding:0 6px 0 12px;border-radius:9px 9px 0 0;color:var(--muted);cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:pan-x;font-size:13px;font-weight:500}
+.nbtab + .nbtab::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:1px;background:var(--line)}
+.nbtab[aria-selected=true]::before,.nbtab[aria-selected=true] + .nbtab::before{display:none}
+.nbtab:hover{background:color-mix(in srgb,var(--panel) 50%,transparent)}
+.nbtab[aria-selected=true]{background:var(--panel);color:var(--ink);box-shadow:0 1px 0 var(--panel);margin-bottom:-1px;height:35px;z-index:1}
+.nbtab.drag{opacity:.85;box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:2}
+.nbtab:focus-visible{outline:2px solid var(--brass);outline-offset:-2px}
+.nbname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nbren{flex:1;min-width:0;font:inherit;padding:2px 4px;border:1px solid var(--brass);border-radius:4px;background:var(--bg);color:var(--ink)}
+.nbx{border:0;background:none;color:inherit;width:20px;height:20px;border-radius:50%;line-height:18px;font-size:15px;padding:0;cursor:pointer;opacity:0;flex:none}
+.nbtab:hover .nbx,.nbtab[aria-selected=true] .nbx{opacity:.75}
+.nbx:hover{opacity:1;background:color-mix(in srgb,var(--ink) 14%,transparent)}
+@media (hover:none){.nbx{opacity:.6}}
+.nbadd{border:0;background:none;color:var(--muted);width:30px;height:30px;margin:0 0 3px 2px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer;flex:none}
+.nbadd:hover{background:color-mix(in srgb,var(--ink) 10%,transparent);color:var(--ink)}
+.nbbody{padding:12px 14px 14px;display:flex;flex-direction:column;gap:8px;container-type:inline-size}
+.nbthread{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:12px}
+.nbstep{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:999px;padding:3px 9px;cursor:pointer;font:inherit}
+.nbstep b{color:var(--ink);font-weight:600}
+.nbstep small{opacity:.8}
+.nbstep.on{border-color:var(--brass);color:var(--ink)}
+.nbarrow{color:var(--muted)}
+.nbboard{font-size:13px}
+.nbboard:empty{display:none}
+.nbboard .cards span{font-weight:600}
+.nbboard .h{color:var(--s-h)}.nbboard .d{color:var(--s-d)}.nbboard .c{color:var(--s-c)}
+.nblab{font-size:13px;color:var(--muted);font-weight:500}
+.nbrhead{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-top:4px}
+.nbtools{gap:6px;flex-wrap:wrap}
+.nbsel{max-width:220px;font-size:13px}
+.nbgrid{margin:2px 0}
+.nbgrid .rc{font-size:clamp(8px,2.4cqw,12px)}
+.nbgrid .ghost{position:absolute;left:0;right:0;bottom:0;background:var(--brass);opacity:.22;border-top:1px dashed color-mix(in srgb,var(--brass) 70%,transparent)}
+.nbgrid.ro .rc{cursor:default}
+.nberr:empty{display:none}
+.nbfoot{justify-content:flex-end}
+.nb > h2{margin-bottom:10px}
+#solverPane > .nb{margin-top:20px}
