@@ -15,90 +15,12 @@
 <div class="wrap">
   <header class="top">
     <h1><a href="/" class="home-link">Hot Seat Poker</a> <span class="muted">· Solver</span></h1>
-    <span class="chip" id="engineChip">Loading the solver…</span>
     <span class="spacer"></span>
     <button class="b sm" type="button" id="themeBtn">Light mode</button>
   </header>
-
-  <div class="sgrid">
-    <section class="main" id="setup">
-      <div class="panel">
-        <h2>Spot</h2>
-        <p class="note" id="fromTable" hidden></p>
-        <div class="field"><label>Board <span class="muted">(3 to 5 cards, tap to add or remove)</span></label>
-          <div class="boardrow" id="boardShow"></div>
-          <div class="deck sdeck" id="deck"></div>
-        </div>
-        <div class="fields">
-          <div class="field"><label for="pot">Pot at the start of this street ($)</label><input type="number" id="pot" min="0.01" step="0.01" value="5.5"></div>
-          <div class="field"><label for="eff">Effective stack ($)</label><input type="number" id="eff" min="0.01" step="0.01" value="97.5"></div>
-          <div class="field"><label for="rakePct">Rake (%)</label><input type="number" id="rakePct" min="0" max="25" step="0.5" value="0"></div>
-          <div class="field"><label for="rakeCap">Rake cap ($, 0 = none)</label><input type="number" id="rakeCap" min="0" step="0.5" value="0"></div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>Ranges</h2>
-        <div class="tabs" role="tablist">
-          <button class="tab" role="tab" type="button" id="tabOop" aria-selected="true">Out of position</button>
-          <button class="tab" role="tab" type="button" id="tabIp" aria-selected="false">In position</button>
-        </div>
-        <div class="fields">
-          <div class="field"><label for="who">Player</label><input type="text" id="who" maxlength="24"></div>
-          <div class="field"><label for="preset">Load a starting range</label><select id="preset"><option value="">Choose…</option></select></div>
-        </div>
-        <div class="rgrid" id="rgrid" aria-label="Range grid"></div>
-        <div class="row paint"><label for="paintW">Tap paints</label><input type="range" id="paintW" min="0" max="100" step="5" value="100"><span id="paintTxt">100%</span>
-          <button class="b sm" type="button" id="clearR">Clear</button></div>
-        <div class="field"><label for="rtext">Range text</label><textarea id="rtext" rows="3" spellcheck="false"></textarea></div>
-        <p class="note" id="rinfo"></p>
-      </div>
-
-      <div class="panel">
-        <h2>Bet sizes</h2>
-        <div class="row"><button class="b sm" type="button" data-tree="quick">Quick</button><button class="b sm" type="button" data-tree="standard">Standard</button><button class="b sm" type="button" data-tree="detailed">Detailed</button></div>
-        <p class="note">Both players use the same sizes. Bets are a percentage of the pot; raises like “3x” are multiples of the bet. Leave raises empty for no raises. More sizes give a more exact answer but need more memory and time.</p>
-        <div class="sizes">
-          <span></span><span class="muted">Bets</span><span class="muted">Raises</span>
-          <span>Flop</span><input type="text" id="fb" aria-label="Flop bets"><input type="text" id="fr" aria-label="Flop raises">
-          <span>Turn</span><input type="text" id="tb" aria-label="Turn bets"><input type="text" id="tr" aria-label="Turn raises">
-          <span>River</span><input type="text" id="rb" aria-label="River bets"><input type="text" id="rr" aria-label="River raises">
-        </div>
-        <details class="adv"><summary>More settings</summary>
-          <div class="fields">
-            <div class="field"><label for="acc">Stop at accuracy (% of pot)</label><input type="number" id="acc" min="0.05" max="10" step="0.05" value="0.5"></div>
-            <div class="field"><label for="maxIt">Most iterations</label><input type="number" id="maxIt" min="10" max="5000" step="10" value="1000"></div>
-            <div class="field"><label for="allinT">Add all-in when stack is under (× pot)</label><input type="number" id="allinT" min="0" step="0.5" value="1.5"></div>
-            <div class="field"><label for="forceT">Force all-in when a bet leaves under (× pot)</label><input type="number" id="forceT" min="0" step="0.05" value="0.15"></div>
-          </div>
-        </details>
-      </div>
-
-      <div class="panel">
-        <div class="row"><button class="b primary big" type="button" id="solveBtn" disabled>Solve</button><button class="b" type="button" id="stopBtn" hidden>Stop</button></div>
-        <div class="prog" id="prog" hidden><div class="bar"><span id="progBar"></span></div><p class="note" id="progTxt"></p></div>
-        <p class="err" id="msg" role="status"></p>
-      </div>
-    </section>
-
-    <section class="main" id="results">
-      <div class="panel" id="resPanel">
-        <h2>Results</h2>
-        <p class="note" id="resEmpty">Set up a spot and press Solve. The answer shows here: how often each hand should check, bet, call or fold, street by street.</p>
-        <div id="resBody" hidden>
-          <div class="path" id="path"></div>
-          <div class="nodehead" id="nodeHead"></div>
-          <div class="acts" id="acts"></div>
-          <div class="rgrid res" id="sgrid"></div>
-          <div class="legend" id="legend"></div>
-          <div class="detail" id="detail"><p class="note">Tap a hand to see each combo.</p></div>
-        </div>
-      </div>
-    </section>
-  </div>
-
+  <div id="solver"></div>
   <footer class="sfoot note">
-    Runs entirely in your browser; nothing is sent anywhere. Solver engine: <a href="https://github.com/b-inary/postflop-solver" target="_blank" rel="noopener">postflop-solver</a> by Wataru Inariba, used under the GNU AGPL v3.
+    Runs entirely on your own device; nothing is sent anywhere. Solver engine: <a href="https://github.com/b-inary/postflop-solver" target="_blank" rel="noopener">postflop-solver</a> by Wataru Inariba, used under the GNU AGPL v3.
     Source code for this site: <a href="https://github.com/nyarkocaster/hot-seat-poker" target="_blank" rel="noopener">github.com/nyarkocaster/hot-seat-poker</a>.
   </footer>
 </div>
