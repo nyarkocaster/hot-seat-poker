@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Solver app · Hot Seat Poker</title>
+<meta name="description" content="The free Hot Seat Solver app runs big postflop solves on your own computer.">
+<script>try{var t=localStorage.getItem("hsp-theme");document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){}</script>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/style.css">
+<style>
+body{margin:0}.doc{max-width:760px}.doc h2{margin-top:22px}.doc li{margin:6px 0}.doc a{color:var(--brass)}
+.dl{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}.dl a.b{color:inherit}.dl a.b.primary{color:#fff}
+.os[hidden]{display:none}
+</style>
+</head>
+<body>
+<div class="wrap doc">
+  <header class="top"><h1><a href="/" style="color:inherit;text-decoration:none">Hot Seat Poker</a> <span class="muted">· Solver app</span></h1></header>
+  <div class="panel">
+    <h2 style="margin-top:0">Do you need it?</h2>
+    <p>Probably not for most spots. Turn and river spots, and flops with the <b>Quick</b> or <b>Standard</b> bet sizes, solve right in the browser with nothing to install.</p>
+    <p>Browsers can only use about 4 GB of memory, so bigger trees (several bet sizes on the flop, or very wide ranges) need this free app. It runs the solve on your computer with all of its memory and CPU, and everyone in your lobby sees the results.</p>
+    <h2>Download</h2>
+    <div class="dl">
+      <a class="b primary" id="dlMain" href="#">Download</a>
+      <a class="b" href="https://github.com/nyarkocaster/hot-seat-poker/releases/download/solver-app/hot-seat-solver-windows.zip">Windows</a>
+      <a class="b" href="https://github.com/nyarkocaster/hot-seat-poker/releases/download/solver-app/hot-seat-solver-mac.zip">Mac</a>
+      <a class="b" href="https://github.com/nyarkocaster/hot-seat-poker/releases/download/solver-app/hot-seat-solver-linux.zip">Linux</a>
+    </div>
+    <div class="os" id="osWin">
+      <h2>Windows</h2>
+      <ol>
+        <li>Open the downloaded zip file and drag <b>hot-seat-solver.exe</b> to your desktop (or any folder).</li>
+        <li>Double-click it. Windows may say “Windows protected your PC” because the app isn't from a big company: click <b>More info</b>, then <b>Run anyway</b>. You only do this once.</li>
+        <li>A black window opens saying <i>Hot Seat Solver is running</i>. Leave it open while you study.</li>
+      </ol>
+    </div>
+    <div class="os" id="osMac">
+      <h2>Mac</h2>
+      <ol>
+        <li>Double-click the downloaded zip to unpack it, then double-click <b>hot-seat-solver</b>.</li>
+        <li>The first time, your Mac blocks it because it isn't from the App Store. Open <b>System Settings → Privacy &amp; Security</b>, scroll down, and click <b>Open Anyway</b> next to “hot-seat-solver”. Then open it again. You only do this once.</li>
+        <li>A Terminal window opens saying <i>Hot Seat Solver is running</i>. Leave it open while you study.</li>
+      </ol>
+    </div>
+    <div class="os" id="osLinux">
+      <h2>Linux</h2>
+      <ol><li>Unzip, then run <code>./hot-seat-solver</code> in a terminal and leave it running.</li></ol>
+    </div>
+    <h2>Use it</h2>
+    <ol>
+      <li>On the solver (at the table or on the solver page), click <b>Connect the solver app</b> under the Solve button.</li>
+      <li>Your browser may ask whether hotseatpoker.com can access devices on your network. Choose <b>Allow</b>: that's how the page talks to the app on your own computer.</li>
+      <li>From then on, solves run in the app. This browser remembers it and reconnects by itself next time, as long as the app is open.</li>
+    </ol>
+    <h2>Good to know</h2>
+    <ul>
+      <li>Nothing is uploaded: the page sends the spot to the app on your computer, and only Hot Seat Poker pages can use it.</li>
+      <li>A big flop can need 4 to 16 GB of memory and a few minutes. The app says how much before it starts and won't start a solve your computer can't hold.</li>
+      <li>In a lobby, students see your solve's results through the lobby; they don't need the app. Keep the app and your page open until you're done reviewing.</li>
+      <li>The app is open source (GNU AGPL v3), built from <a href="https://github.com/nyarkocaster/hot-seat-poker/tree/main/solver-app">the code on GitHub</a>, using postflop-solver by Wataru Inariba.</li>
+    </ul>
+  </div>
+</div>
+<script>
+(function(){
+  var ua=navigator.userAgent, os=/Windows/i.test(ua)?"Win":/Mac/i.test(ua)?"Mac":/Linux/i.test(ua)?"Linux":"";
+  var files={Win:"windows",Mac:"mac",Linux:"linux"};
+  var main=document.getElementById("dlMain");
+  if(os){main.href="https://github.com/nyarkocaster/hot-seat-poker/releases/download/solver-app/hot-seat-solver-"+files[os]+".zip";main.textContent="Download for "+(os==="Win"?"Windows":os);
+    ["Win","Mac","Linux"].forEach(function(k){document.getElementById("os"+k).hidden=k!==os})}
+  else main.hidden=true;
+})();
+</script>
+</body>
+</html>
