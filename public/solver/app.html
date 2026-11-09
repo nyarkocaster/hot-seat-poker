@@ -26,7 +26,6 @@ body{margin:0}.doc{max-width:760px}.doc h2{margin-top:22px}.doc li{margin:6px 0}
     <div class="dl">
       <a class="b primary" id="dlMain" href="#">Download</a>
       <a class="b" href="https://github.com/nyarkocaster/hot-seat-poker/releases/download/solver-app/hot-seat-solver-windows.zip">Windows</a>
-      <a class="b" href="https://github.com/nyarkocaster/hot-seat-poker/releases/download/solver-app/hot-seat-solver-mac.zip">Mac</a>
       <a class="b" href="https://github.com/nyarkocaster/hot-seat-poker/releases/download/solver-app/hot-seat-solver-linux.zip">Linux</a>
     </div>
     <div class="os" id="osWin">
@@ -39,11 +38,7 @@ body{margin:0}.doc{max-width:760px}.doc h2{margin-top:22px}.doc li{margin:6px 0}
     </div>
     <div class="os" id="osMac">
       <h2>Mac</h2>
-      <ol>
-        <li>Double-click the downloaded zip to unpack it, then double-click <b>hot-seat-solver</b>.</li>
-        <li>The first time, your Mac blocks it because it isn't from the App Store. Open <b>System Settings → Privacy &amp; Security</b>, scroll down, and click <b>Open Anyway</b> next to “hot-seat-solver”. Then open it again. You only do this once.</li>
-        <li>A Terminal window opens saying <i>Hot Seat Solver is running</i>. Leave it open while you study.</li>
-      </ol>
+      <p>A Mac version isn't available yet. On a Mac, use the Quick or Standard bet sizes, which solve right in the browser.</p>
     </div>
     <div class="os" id="osLinux">
       <h2>Linux</h2>
@@ -67,11 +62,11 @@ body{margin:0}.doc{max-width:760px}.doc h2{margin-top:22px}.doc li{margin:6px 0}
 <script>
 (function(){
   var ua=navigator.userAgent, os=/Windows/i.test(ua)?"Win":/Mac/i.test(ua)?"Mac":/Linux/i.test(ua)?"Linux":"";
-  var files={Win:"windows",Mac:"mac",Linux:"linux"};
+  var files={Win:"windows",Linux:"linux"};
   var main=document.getElementById("dlMain");
-  if(os){main.href="https://github.com/nyarkocaster/hot-seat-poker/releases/download/solver-app/hot-seat-solver-"+files[os]+".zip";main.textContent="Download for "+(os==="Win"?"Windows":os);
+  if(os&&files[os]){main.href="https://github.com/nyarkocaster/hot-seat-poker/releases/download/solver-app/hot-seat-solver-"+files[os]+".zip";main.textContent="Download for "+(os==="Win"?"Windows":os);
     ["Win","Mac","Linux"].forEach(function(k){document.getElementById("os"+k).hidden=k!==os})}
-  else main.hidden=true;
+  else{main.hidden=true;if(os) ["Win","Mac","Linux"].forEach(function(k){document.getElementById("os"+k).hidden=k!==os})}
 })();
 </script>
 </body>
