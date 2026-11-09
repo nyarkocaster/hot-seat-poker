@@ -140,17 +140,31 @@ export function defaultShared() {
     prog: null, info: null, cards: null, solved: null, path: [{ hist: [], label: "Start" }], solveId: null, err: "", mem: 0 };
 }
 
-/* A spot recorded by the table (engine noteSpot) turned into solver setup. */
-export function spotFromTable(sp, P) {
+/* A spot recorded by the table (engine noteSpot) turned into solver setup. The solver plays two
+   players, so in a multiway pot it studies two of them (seats = their seat numbers, or a default pair)
+   with the whole pot in the middle. sp.pl is in postflop order: first to act first. */
+export function spotFromTable(sp, P, seats) {
   const r = (P && P.rules) || {};
   const street = { flop: "flop", turn: "turn", river: "river" }[sp.st];
+  const all = sp.pl;
+  let pick = Array.isArray(seats) && seats.length === 2 ? all.filter(p => seats.includes(p.i)) : [];
+  if (pick.length !== 2) {
+    if (all.length <= 2) pick = all.slice();
+    else { const ag = all.find(p => p.agg); const last = all[all.length - 1];
+      pick = ag ? [ag, ag === last ? all[0] : last] : [all[0], last]; }
+    pick.sort((a, b) => all.indexOf(a) - all.indexOf(b));
+  }
+  const who = l => l.map(p => p.pos || p.name).join(" vs ");
+  const multi = all.length > 2;
   return {
-    spot: { ...defaultSpot(), board: sp.board.map(cardId), pot: sp.pot, eff: Math.max(0.01, Math.min(...sp.pl.map(p => +p.stack || 0))),
+    spot: { ...defaultSpot(), board: sp.board.map(cardId), pot: sp.pot, eff: Math.max(0.01, Math.min(...pick.map(p => +p.stack || 0))),
       rakePct: r.rakePct || 0, rakeCap: r.rakeCap || 0,
-      names: sp.pl.map(p => [p.pos, p.name].filter(Boolean).join(" · ").slice(0, 24)),
+      names: pick.map(p => [p.pos, p.name].filter(Boolean).join(" · ").slice(0, 24)),
       sizes: (sp.board.length === 3 ? TREES.quick : TREES.standard).slice(),
-      note: `From the table: the ${street} of hand #${P ? P.hand : "?"}, ${sp.pl.map(p => p.pos).join(" vs ")}. Set both ranges with “Load a starting range” or by painting the grid.` },
-    link: { hand: P ? P.hand : 0, st: sp.st, seats: sp.pl.map(p => p.i) },
+      note: multi
+        ? `From the table: the ${street} of hand #${P ? P.hand : "?"}, ${all.length} players (${all.map(p => p.pos || p.name).join(", ")}). The solver plays two at a time, so this studies ${who(pick)} with the whole pot. Change who under “Players to study”. Set both ranges with “Load a starting range” or by painting the grid.`
+        : `From the table: the ${street} of hand #${P ? P.hand : "?"}, ${who(pick)}. Set both ranges with “Load a starting range” or by painting the grid.` },
+    link: { hand: P ? P.hand : 0, st: sp.st, seats: pick.map(p => p.i), ...(multi ? { all: all.map(p => ({ i: p.i, pos: p.pos || "", name: p.name || "" })) } : {}) },
   };
 }
 
@@ -176,6 +190,7 @@ export function createSolver(root, opt = {}) {
       <div class="panel" id="sv-pSpot"${anc("svspot")}>
         <h2>Spot</h2>
         <p class="note" id="sv-note" hidden></p>
+        <div class="field" id="sv-pairF" hidden><label for="sv-pair">Players to study</label><select id="sv-pair"></select></div>
         <div class="field"><label>Board <span class="muted">(3 to 5 cards, tap to add or remove)</span></label>
           <div class="boardrow" id="sv-boardShow"></div>
           <div class="deck sdeck" id="sv-deck"></div>
@@ -716,6 +731,7 @@ export function createSolver(root, opt = {}) {
       }
       for (const ev of line.filter(x => x.st === st)) {
         const n = await query(hist);
+        if (!L.seats.includes(ev.i)) { if (ev.a === "check" || ev.a === "fold") continue; return path; } // a third player put chips in
         if (n.p !== "oop" && n.p !== "ip") return path;
         const k = n.p === "oop" ? 0 : 1;
         if (L.seats[k] !== ev.i) return path;
@@ -748,12 +764,36 @@ export function createSolver(root, opt = {}) {
     const key = P.hand + "|" + spots.length;
     if (key === autoKey) return;
     autoKey = key;
-    if (sp.pl.length !== 2 || ["ready", "solving", "setting"].includes(sv.status)) return;
+    if (["ready", "solving", "setting"].includes(sv.status)) return;
     if (sv.link && sv.link.hand === P.hand && sv.link.st === sp.st) return;
-    const x = spotFromTable(sp, P);
+    useTableSpot(sp, P, sv.link && sv.link.hand === P.hand ? sv.link.seats : null);
+  }
+  // copy a table spot into the setup, keeping the ranges, sizes and solve settings
+  function useTableSpot(sp, P, seats) {
+    const x = spotFromTable(sp, P, seats);
     patch({ spot: { ...x.spot, ranges: sv.spot.ranges.slice(), sizes: sv.spot.sizes.slice(), acc: sv.spot.acc, maxIt: sv.spot.maxIt },
       link: x.link, status: "idle", host: null, solveId: null, cards: null, solved: null, info: null, err: "", path: [{ hist: [], label: "Start" }] });
   }
+  // multiway: which two players the solver studies
+  function renderPair() {
+    const L = sv.link, f = $("pairF");
+    if (!L || !Array.isArray(L.all) || L.all.length < 3) { f.hidden = true; return; }
+    f.hidden = false;
+    const nm = p => esc([p.pos, p.name].filter(Boolean).join(" · "));
+    let o = "";
+    for (let a = 0; a < L.all.length; a++) for (let b = a + 1; b < L.all.length; b++) {
+      const v = L.all[a].i + "," + L.all[b].i, on = L.seats && L.seats.includes(L.all[a].i) && L.seats.includes(L.all[b].i);
+      o += `<option value="${v}"${on ? " selected" : ""}>${nm(L.all[a])} vs ${nm(L.all[b])}</option>`;
+    }
+    if ($("pair") !== document.activeElement) setHTML($("pair"), o);
+    const P = TB && TB.current();
+    $("pair").disabled = !canEdit() || !P || P.hand !== L.hand || ["solving", "setting"].includes(sv.status);
+  }
+  $("pair").onchange = () => {
+    const P = TB && TB.current(), L = sv.link; if (!P || !L || !canEdit()) return;
+    const sp = (P.spots || []).find(x => x.st === L.st); if (!sp) return;
+    useTableSpot(sp, P, $("pair").value.split(",").map(Number));
+  };
   function tableUpdate(P) {
     lastP = P;
     autoLoad(P);
@@ -791,7 +831,7 @@ export function createSolver(root, opt = {}) {
   let raf = 0;
   function render() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; renderNow(); }); }
   function renderNow() {
-    renderBar(); syncInputs(); renderBoard(); renderRangeGrid(); renderProgress(); renderEngine(); renderBig();
+    renderBar(); syncInputs(); renderPair(); renderBoard(); renderRangeGrid(); renderProgress(); renderEngine(); renderBig();
     if (sv.status === "ready" && sv.cards && sv.solved) loadNode();
     else { $("resBody").hidden = true; $("resEmpty").hidden = false; node = null; nodeKey = "";
       $("resEmpty").textContent = sv.status === "solving" || sv.status === "setting" ? "Solving… the results show here when it's done." : "Set up a spot and press Solve. The answer shows here: how often each hand should check, bet, call or fold, street by street."; }
