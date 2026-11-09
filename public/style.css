@@ -171,3 +171,4 @@ input[type=range]{flex:1;min-width:120px;accent-color:var(--brass)}
 .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .inline label{font-size:13px}
 input[type=password]{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 9px;min-height:36px}
+a.b{text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:4px}
