@@ -4,6 +4,7 @@
 // - The page itself (public/) is served as static files.
 import {DurableObject} from "cloudflare:workers";
 import {createEngine,freshGame} from "../public/engine.js";
+import {applyNotesPatch,normalizeNotebook} from "../public/notes.js";
 
 const json=(o,s=200)=>new Response(JSON.stringify(o),{status:s,headers:{"content-type":"application/json","cache-control":"no-store"}});
 const rid=n=>{const al="abcdefghjkmnpqrstuvwxyz23456789";const a=new Uint32Array(n);crypto.getRandomValues(a);return [...a].map(x=>al[x%al.length]).join("")};
@@ -54,11 +55,11 @@ export class Directory extends DurableObject{
 export class Lobby extends DurableObject{
   constructor(ctx,env){
     super(ctx,env);
-    this.E=createEngine(); this.meta=null; this.toks={}; this.fails=[]; this.curs=new Map(); this.lastDir=""; this.sv=null;
+    this.E=createEngine(); this.meta=null; this.toks={}; this.fails=[]; this.curs=new Map(); this.lastDir=""; this.sv=null; this.nb=null;
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}','{"t":"pong"}'));
     ctx.blockConcurrencyWhile(async()=>{
-      const v=await ctx.storage.get(["meta","g","hist","toks","sv"]);
-      this.meta=v.get("meta")||null; this.toks=v.get("toks")||{}; this.sv=v.get("sv")||null;
+      const v=await ctx.storage.get(["meta","g","hist","toks","sv","nb"]);
+      this.meta=v.get("meta")||null; this.toks=v.get("toks")||{}; this.sv=v.get("sv")||null; this.nb=v.get("nb")||null;
       if(v.get("g")) this.E.G=v.get("g");
       (v.get("hist")||[]).forEach(h=>this.E.history.push(h));
     });
@@ -74,7 +75,7 @@ export class Lobby extends DurableObject{
     if(!(await this.checkCode(code))) return {ok:false,error:"That teacher code doesn't match this lobby."};
     id=this.meta.id;
     // Clear this lobby first, so nothing it does while people disconnect can re-list it.
-    this.meta=null; this.E.G=null; this.E.history.length=0; this.toks={}; this.lastDir=""; this.curs.clear(); this.sv=null;
+    this.meta=null; this.E.G=null; this.E.history.length=0; this.toks={}; this.lastDir=""; this.curs.clear(); this.sv=null; this.nb=null;
     await dirStub(this.env).remove(id);
     await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll();
     for(const ws of this.ctx.getWebSockets()){try{ws.send(JSON.stringify({t:"deleted"}));ws.close(4004,"Lobby deleted")}catch(e){}}
@@ -115,7 +116,7 @@ export class Lobby extends DurableObject{
   }
   svGate(ws,a){
     const ok=this.svOk(a);
-    if(ok&&!a.sv){a.sv=true;ws.serializeAttachment(a);this.send(ws,{t:"sv",on:true,full:this.sv})}
+    if(ok&&!a.sv){a.sv=true;ws.serializeAttachment(a);this.send(ws,{t:"sv",on:true,full:this.sv});this.send(ws,{t:"nb",full:this.nb})}
     else if(!ok&&a.sv){a.sv=false;ws.serializeAttachment(a);this.send(ws,{t:"sv",off:true})}
   }
   svSockets(except){return this.sockets().filter(x=>x.ws!==except&&x.a.sv&&this.svOk(x.a))}
@@ -146,7 +147,7 @@ export class Lobby extends DurableObject{
     if(typeof raw!=="string"||raw.length>1500000) return;
     let m; try{m=JSON.parse(raw)}catch(e){return}
     if(!m||typeof m!=="object") return;
-    if(raw.length>8000&&m.t!=="sv"&&m.t!=="sva") return;
+    if(raw.length>8000&&m.t!=="sv"&&m.t!=="sva"&&!(m.t==="nb"&&raw.length<40000)) return;
     if(!this.meta||!this.E.G){this.send(ws,{t:"error",code:"nolobby",msg:"That lobby doesn't exist anymore."});ws.close(4004,"No such lobby");return}
     const a=ws.deserializeAttachment()||{};
     if(m.t==="hello"){
@@ -211,6 +212,14 @@ export class Lobby extends DurableObject{
         if(Object.keys(p).some(k=>k!=="prog")) await this.ctx.storage.put("sv",this.sv);
         for(const {ws:o} of this.svSockets(ws)) this.send(o,{t:"sv",p});
         return;}
+      case "nb":{ // a change to the shared notes (same people as the solver)
+        if(!this.svOk(a)||!m.np||typeof m.np!=="object"||Array.isArray(m.np)) return;
+        const np={}; for(const k of Object.keys(m.np).slice(0,40)) if(k==="order"||/^t\.[a-z0-9]{1,10}(\.(name|text|range))?$/.test(k)) np[k]=m.np[k];
+        if(!Object.keys(np).length) return;
+        this.nb=applyNotesPatch(normalizeNotebook(this.nb),np); await this.ctx.storage.put("nb",this.nb);
+        for(const {ws:o} of this.svSockets(ws)) this.send(o,{t:"nb",np});
+        return;
+      }
       case "svq":{ // ask the computer that solved for one spot in the tree
         if(!this.svOk(a)||!this.sv||!this.sv.host) return;
         const host=this.sockets().find(x=>x.a.peer===this.sv.host);
