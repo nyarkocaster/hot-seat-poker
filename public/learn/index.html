@@ -94,17 +94,19 @@
         <dd>Deals the same hole cards again next hand, so students can try a different line with the same holding.</dd>
         <dt>Students can open the solver</dt>
         <dd>Never, between hands only, or any time. “Between hands” keeps students from checking the answer in the middle of a decision.</dd>
+        <dt>Students can use the poker stove</dt>
+        <dd>The same choice for the poker stove, set under Table setup. It starts at “between hands”. Teachers can always use it.</dd>
         <dt>Ask everyone</dt>
         <dd>When a player is to act, press <span class="ui">Ask everyone what … should do</span>. Between hands, use <span class="ui">Ask a question</span>. The question and choices are filled in for you, and you can edit both. Each student picks an answer privately, with an amount for a bet or raise and an optional reason. You see who has answered but not what they said. Press <span class="ui">Reveal answers</span> to show everyone the tally, the amounts and the reasons together.</dd>
       </dl>
 
       <h2 id="tools">Odds calculator and poker stove</h2>
-      <p>Both are hidden until you turn them on under <span class="ui">Tools</span> at the top. Each person turns them on for themselves, and nobody else sees your tools.</p>
+      <p>Both are hidden until you turn them on under <span class="ui">Tools</span> at the top. Each person turns them on for themselves, and nobody else sees your tools. Students can use the stove when the teacher's setting allows it.</p>
       <dl>
         <dt>Odds calculator</dt>
         <dd>Fills in the pot and the amount to call from the hand being played, then shows every step as the formula followed by the same formula with the real numbers. It covers pot odds and the equity you need, outs (next card, by the river, and the rules of 2 and 4), whether calling makes money and its expected value, the implied odds you'd need, and what a bluff needs to work. Teachers can pick any player, and outs are counted against everyone's real cards. Untick <span class="ui">Use this hand's numbers</span> to try your own.</dd>
         <dt>Poker stove</dt>
-        <dd>Works out each player's equity: how often they'd win if all the cards were dealt. Type a hand like <kbd>AhKh</kbd> or a range like <kbd>QQ+,AKs</kbd> for up to six players, with an optional board and dead cards. Small jobs are checked against every possible board; big ones are estimated from a few million deals. <span class="ui">Use the table</span> fills in the hand being played (your own cards if you're a student), and <span class="ui">Use the solver's ranges</span> copies the solver's two ranges. Click a player to see what hands they end up with, or send their equity to the odds calculator.</dd>
+        <dd>Works out each player's equity: how often they'd win if all the cards were dealt. Type a hand like <kbd>AhKh</kbd> or a range like <kbd>QQ+,AKs</kbd> for up to six players, with an optional board and dead cards. Small jobs are checked against every possible board; big ones are estimated from a few million deals. <span class="ui">Use the table</span> fills in the hand being played (your own cards if you're a student), and <span class="ui">Use the solver's ranges</span> brings in the solver's two players. Before a solve, that's the starting ranges as typed, on the solver's board. After a solve, it's both ranges at the spot you're looking at in the answer: after a check and a bet, say, each hand counted by how often the solver plays it that way to get there. Typing in a row replaces it. Click a player to see what hands they end up with, or send their equity to the odds calculator.</dd>
       </dl>
 
       <h2 id="solver">Study a spot in the solver</h2>
