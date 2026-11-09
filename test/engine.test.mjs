@@ -27,6 +27,7 @@ function check(T,tag){
     if(sp.pl.filter(p=>p.agg).length>1) fail(tag+": two aggressors");
     if(sp.pl.some(p=>p.stack<0)) fail(tag+": spot stack");
   });
+  (G.line||[]).forEach(x=>{if(!["flop","turn","river"].includes(x.st)||!["check","call","fold","bet","raise"].includes(x.a)||!(x.i>=0&&x.i<9)||!(x.to>=0)) fail(tag+": bad line entry "+JSON.stringify(x))});
   if(G.phase==="done"&&tag==="hand end") st.spots=(st.spots||0)+(G.spots||[]).length;
 }
 const ev=c=>evaluate(c.split(" "));
