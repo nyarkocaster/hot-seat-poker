@@ -3,6 +3,7 @@ import {createEngine,freshGame,RANKS,SYM,STREETS,money,pretty} from "./engine.js
 import {createSolver} from "./solver/core.js";
 import {createDock} from "./dock.js";
 import {createNotes} from "./notes.js";
+import {createOdds,createStove} from "./tools.js";
 
 const $=s=>document.querySelector(s);
 const esc=t=>String(t==null?"":t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -59,21 +60,112 @@ function onMsg(m){
     if(SV) SV.onMessage(m);
   }
   else if(m.t==="nb"){if(NB) NB.onMessage(m)}
+  else if(m.t==="poll"){POLL=m.poll||null;if(POLL&&pollPick&&pollPick.id!==POLL.id) pollPick=null;if(POLL&&POLL.id!==pollSeen){pollSeen=POLL.id;pollMin=false}renderPoll()}
+}
+
+/* ---------- study tools: hidden until each person turns them on ---------- */
+const TOOLS=lsGet("hsp-tools")||{};
+function setTool(k,on){
+  TOOLS[k]=!!on; lsSet("hsp-tools",TOOLS); render();
+  if(on){const P=view(); if(k==="odds"&&ODDS){ODDS.refresh();} if(k==="stove"&&STOVE&&P&&["preflop","flop","turn","river"].includes(P.phase)&&STOVE.rows.every(r=>!r.text)) STOVE.fromTable();
+    const el=$(k==="odds"?"#oddsPanel":"#stovePanel"); setTimeout(()=>{const w=el.closest(".dk")||el; w.scrollIntoView({behavior:"smooth",block:"nearest"})},60)}
+}
+
+/* ---------- polls: the teacher asks, everyone answers privately, then the answers are shown ---------- */
+let POLL=null, pollDraft=null, pollPick=null, pollMin=false, pollSeen="";
+function pollDefault(){
+  const P=view(); const inHand=P&&["preflop","flop","turn","river"].includes(P.phase)&&P.toAct!=null;
+  if(!inHand) return {q:"",opts:"Fold, Call, Raise",amt:[false,false,true],ctx:null};
+  const s=P.seats[P.toAct], toCall=Math.max(0,P.curBet-s.bet), st=STREETS[P.phase].toLowerCase();
+  return toCall>0
+    ?{q:`${s.name} faces ${money(toCall)} to call on the ${st}. What should they do?`,opts:"Fold, Call, Raise",amt:[false,false,true],ctx:{hand:P.hand,seat:P.toAct}}
+    :{q:`It's on ${s.name} on the ${st}. What should they do?`,opts:"Check, Bet",amt:[false,true],ctx:{hand:P.hand,seat:P.toAct}};
+}
+const AMT_RX=/^(bet|raise|raise to|bet to|jam|all.?in|shove|3-?bet|4-?bet|open)$/i;
+function pollClick(t){
+  const op=t.dataset.poll;
+  if(op==="new"){if(!isT()) return;pollDraft=pollDefault();pollMin=false;renderPoll(true);setTimeout(()=>{const i=$("#pollQ");if(i){i.focus();i.select()}},30);return}
+  if(op==="cancel"){pollDraft=null;renderPoll(true);return}
+  if(op==="ask"){
+    const q=($("#pollQ")||{}).value||"", opts=(($("#pollOpts")||{}).value||"").split(",").map(x=>x.trim()).filter(Boolean).slice(0,6);
+    if(opts.length<2){flash("Give at least two choices, separated by commas");return}
+    if(wsSend({t:"poll",op:"ask",q,opts,amt:opts.map(o=>AMT_RX.test(o)),ctx:pollDraft&&pollDraft.ctx})){pollDraft=null;pollPick=null}
+    return;
+  }
+  if(op==="min"){pollMin=!pollMin;renderPoll(true);return}
+  if(!POLL) return;
+  if(op==="pick"){const k=+t.dataset.k;pollPick={id:POLL.id,a:k,amt:pollPick&&pollPick.amt||"",why:pollPick&&pollPick.why||""};renderPoll(true);const a=$("#pollAmt");if(a&&POLL.amt[k]) a.focus();return}
+  if(op==="send"){
+    if(!pollPick||pollPick.a==null){flash("Pick an answer first");return}
+    if(POLL.amt[pollPick.a]&&pollPick.amt!==""&&!(+pollPick.amt>0)){flash("Enter an amount, or leave it empty");return}
+    wsSend({t:"poll",op:"answer",id:POLL.id,a:pollPick.a,amt:pollPick.amt===""?null:+pollPick.amt,why:pollPick.why||""});return;
+  }
+  if(["reveal","hide","end"].includes(op)&&isT()){wsSend({t:"poll",op});return}
+}
+function pollInput(t){
+  const k=t.dataset.pin;
+  if(k==="amt"||k==="why"){if(!POLL) return;pollPick=pollPick&&pollPick.id===POLL.id?pollPick:{id:POLL.id,a:POLL.mine?POLL.mine.a:null,amt:"",why:""};pollPick[k]=t.value}
+}
+let pollKey="";
+function renderPoll(force){
+  const el=$("#pollCard"); if(!el) return;
+  if(mode!=="lobby"||(!POLL&&!pollDraft)){el.hidden=true;el.innerHTML="";pollKey="";return}
+  el.hidden=false;
+  const T=isT();
+  // keep what's being typed: only redraw when something other than the count changed, unless forced
+  const key=JSON.stringify([pollDraft&&1,POLL&&[POLL.id,POLL.revealed,POLL.mine,POLL.answers,POLL.n],pollPick&&[pollPick.a],pollMin,T]);
+  if(!force&&key===pollKey) return; pollKey=key;
+  const f=document.activeElement, fk=f&&el.contains(f)?(f.id||""):"", pos=f&&f.selectionStart;
+  let h=`<div class="pchead"><b>${pollDraft?"Ask everyone":"Poll"}</b>${POLL&&!pollDraft?`<span class="muted">${POLL.n} answered</span>`:""}<button type="button" class="pcmin" data-poll="min" aria-expanded="${!pollMin}" aria-label="${pollMin?"Show":"Hide"} the poll">${pollMin?"▴":"▾"}</button></div>`;
+  if(pollMin){el.innerHTML=h;el.classList.add("min");return}
+  el.classList.remove("min");
+  if(pollDraft){
+    const d=pollDraft;
+    h+=`<label class="pclab" for="pollQ">Question</label><input id="pollQ" type="text" maxlength="160" value="${esc(d.q)}" placeholder="What would you do here?">
+      <label class="pclab" for="pollOpts">Choices <span class="muted">(separated by commas; Bet and Raise ask for an amount)</span></label><input id="pollOpts" type="text" maxlength="200" value="${esc(d.opts)}">
+      <div class="row"><button class="b primary" type="button" data-poll="ask">Ask${POLL?" (replaces the current poll)":""}</button><button class="b" type="button" data-poll="cancel">Cancel</button></div>
+      <p class="note">Everyone answers privately. Answers stay hidden until you reveal them.</p>`;
+  } else {
+    const P=POLL, mine=P.mine, pick=pollPick&&pollPick.id===P.id?pollPick:(mine?{a:mine.a,amt:mine.amt==null?"":String(mine.amt),why:mine.why||""}:null);
+    h+=`<p class="pcq">${esc(P.q)}</p>`;
+    if(!P.revealed){
+      h+=`<div class="pcopts">${P.opts.map((o,k)=>`<button type="button" class="b${pick&&pick.a===k?" on":""}" data-poll="pick" data-k="${k}" aria-pressed="${!!(pick&&pick.a===k)}">${esc(o)}</button>`).join("")}</div>`;
+      if(pick&&P.amt[pick.a]) h+=`<label class="pclab" for="pollAmt">${esc(P.opts[pick.a])} amount ($, optional)</label><input id="pollAmt" type="number" min="0" step="1" data-pin="amt" value="${esc(pick.amt)}">`;
+      h+=`<label class="pclab" for="pollWhy">Why? <span class="muted">(optional)</span></label><input id="pollWhy" type="text" maxlength="140" data-pin="why" value="${esc(pick?pick.why:"")}" placeholder="One line on your thinking">
+        <div class="row"><button class="b primary" type="button" data-poll="send">${mine?"Change my answer":"Send my answer"}</button>${mine?`<span class="note">You said <b>${esc(P.opts[mine.a])}${mine.amt?` ${money(mine.amt)}`:""}</b></span>`:""}</div>
+        <p class="note pcwho">${P.n?`${P.n} answered: ${P.who.map(esc).join(", ")}`:"No answers yet."} Answers stay hidden until the teacher reveals them.</p>`;
+      if(T) h+=`<div class="row pcteach"><button class="b gold" type="button" data-poll="reveal"${P.n?"":" disabled"}>Reveal answers</button><button class="b sm" type="button" data-poll="end">End poll</button></div>`;
+    } else {
+      const A=P.answers||[], n=A.length||1;
+      h+=P.opts.map((o,k)=>{const who=A.filter(x=>x.a===k);return `<div class="pcres"><div class="pcrow"><span>${esc(o)}</span><b>${who.length} · ${Math.round(who.length/n*100)}%</b></div>
+        <div class="pcbar"><i style="width:${(who.length/n*100).toFixed(1)}%"></i></div>
+        ${who.length?`<div class="pcnames">${who.map(x=>`<span>${esc(x.name)}${x.amt?` ${money(x.amt)}`:""}</span>`).join("")}</div>`:""}</div>`}).join("");
+      const why=A.filter(x=>x.why);
+      if(why.length) h+=`<div class="pcwhy"><b>Reasons</b>${why.map(x=>`<p><span>${esc(x.name)}${x.a!=null?` (${esc(P.opts[x.a])})`:""}:</span> ${esc(x.why)}</p>`).join("")}</div>`;
+      if(T) h+=`<div class="row pcteach"><button class="b sm" type="button" data-poll="hide">Hide answers and reopen</button><button class="b sm" type="button" data-poll="end">End poll</button><button class="b sm" type="button" data-poll="new">New question</button></div>`;
+    }
+  }
+  el.innerHTML=h;
+  if(fk){const n=document.getElementById(fk);if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(x){}}}
 }
 
 /* ---------- the solver, in this window ---------- */
-let SV=null, NB=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
+let SV=null, NB=null, ODDS=null, STOVE=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
 const DOCK=createDock($("#duo"));
 function unmountSolver(){
   DOCK.release();
-  if(SV) SV.destroy(); if(NB) NB.destroy(); SV=null; NB=null;
-  $("#solverRoot").innerHTML=""; $("#notesPanel").innerHTML="";
+  if(SV) SV.destroy(); if(NB) NB.destroy(); if(STOVE) STOVE.destroy(); SV=null; NB=null; ODDS=null; STOVE=null;
+  $("#solverRoot").innerHTML=""; $("#notesPanel").innerHTML=""; $("#oddsPanel").innerHTML=""; $("#stovePanel").innerHTML="";
+  POLL=null; pollDraft=null; pollPick=null;
 }
 function mountSolver(){
   unmountSolver();
   const root=$("#solverRoot"); root.className="";
   const transport=mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},peer:()=>myPeer,name:()=>myName||"Someone",canEdit:()=>isT()||svOn}:null;
   SV=createSolver(root,{transport,anchors:mode==="lobby",table:{current:()=>view(),canPush:()=>isT(),push:(k,card)=>{if(E.G&&E.used().has(card)){flash(`${pretty(card)} is in a player's hand, so the table can't deal it`);return false}sendOp({t:"pick",kind:"board",k,card});flash(`${k===3?"Turn":"River"} set to ${pretty(card)} on the table`);return true}}});
+  const tbl={current:()=>view(),mySeat:()=>mySeat,myCards:()=>isT()?null:(MINE&&PUB&&MINE.hand===PUB.hand?MINE.cards:null),isTeacher:()=>isT()};
+  ODDS=createOdds($("#oddsPanel"),{table:tbl});
+  STOVE=createStove($("#stovePanel"),{table:tbl,solver:()=>SV,odds:()=>TOOLS.odds?ODDS:null,flash});
   NB=createNotes($("#notesPanel"),{transport:mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},canEdit:()=>isT()||svOn}:null,table:{current:()=>view()},solver:()=>SV,flash});
   svOn=mode==="local";
 }
@@ -85,6 +177,9 @@ function applyView(){
   $("#solverPane").hidden=!mode||v==="table";
   const sw=$("#viewSwitch"); sw.hidden=!ok;
   sw.querySelectorAll("[data-view-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.viewMode===v)));
+  $("#oddsPanel").hidden=!mode||!TOOLS.odds; $("#stovePanel").hidden=!mode||!TOOLS.stove;
+  $("#toolsWrap").hidden=!mode;
+  document.querySelectorAll("[data-tool]").forEach(x=>{x.checked=!!TOOLS[x.dataset.tool]});
   DOCK.set(mode&&v!=="table"?v:null);
   $("#dockReset").hidden=!DOCK.view;
 }
@@ -194,7 +289,7 @@ function renderNow(){
   }
   $("#stakeChip").hidden=false; $("#stakeChip").textContent=`${money(P.blinds.sb)}/${money(P.blinds.bb)} NLHE · ${P.size}-max`;
   mySeat=T?-1:P.seats.findIndex(s=>s.uid===ME.cid);
-  renderTable(P,T); renderAct(P,T); renderSolve(P,T); applyView(); if(SV) SV.tableUpdate(P); if(NB) NB.tableUpdate(P);
+  renderTable(P,T); renderAct(P,T); renderSolve(P,T); applyView(); if(SV) SV.tableUpdate(P); if(NB) NB.tableUpdate(P); if(ODDS&&TOOLS.odds) ODDS.tableUpdate(P); renderPoll();
   setHTML($("#log"),P.log.slice().reverse().map(t=>`<li>${esc(t)}</li>`).join("")||`<li class="muted">No hands yet.</li>`);
   if(T) renderTeacherSide(); else setSide(studentSide(P));
   if(picker&&!T) picker=null;
@@ -282,7 +377,7 @@ function renderAct(P,T){
   if(!inHand||P.toAct==null){
     const G=E.G;
     setHTML(el,T?`<div class="actbar"><div class="who">${P.phase==="done"?"Hand over.":"Ready to deal."} <span>${P.phase==="done"?"Deal the next hand or set up cards first.":"Set cards and stacks, then deal."}</span></div>
-      <div class="row"><button class="b primary big" type="button" data-cmd="deal">Deal hand</button><button class="b" type="button" data-cmd="undo"${undoCount()?"":" disabled"}>Undo</button>${revealBtn()}</div>
+      <div class="row"><button class="b primary big" type="button" data-cmd="deal">Deal hand</button><button class="b" type="button" data-cmd="undo"${undoCount()?"":" disabled"}>Undo</button>${revealBtn()}${mode==="lobby"?`<button class="b" type="button" data-poll="new">Ask a question</button>`:""}</div>
       <div class="row">${G.rules.straddle?"":`<button class="b sm${G.straddleNext?" on":""}" type="button" data-cmd="straddleNext" aria-pressed="${!!G.straddleNext}">${G.straddleNext?"Straddle on for next hand":"Straddle next hand"}</button>`}
         <button class="b sm${G.bombNext?" on":""}" type="button" data-cmd="bombNext" aria-pressed="${!!G.bombNext}">${G.bombNext?"Bomb pot is next":"Bomb pot next hand"}</button></div>
       <p class="optsum">${esc(optSummary(G.rules,P))} <span class="muted">Change these under Table setup.</span></p></div>`
@@ -304,6 +399,7 @@ function renderAct(P,T){
       ${canRaise?`<button class="b gold big" type="button" data-a="raise" id="raiseBtn">${verb} ${money(def)}</button>`:""}
       ${T?`<button class="b" type="button" data-cmd="undo"${undoCount()?"":" disabled"}>Undo</button>${revealBtn()}${P.deadline?`<button class="b sm" type="button" data-cmd="time">+30s</button>`:""}`:""}
     </div>
+    ${T&&mode==="lobby"?`<div class="row"><button class="b sm" type="button" data-poll="new">Ask everyone what ${esc(s.name)} should do</button></div>`:""}
     ${canRaise?`<div class="row"><input type="range" id="amtRange" min="${minTo}" max="${maxTo}" step="1" value="${def}" aria-label="Bet size">
       <input type="number" id="amtNum" min="${minTo}" max="${maxTo}" step="1" value="${def}" aria-label="Bet amount in dollars"></div>
     <div class="row">${[[.33,"⅓ pot"],[.5,"½ pot"],[.66,"⅔ pot"],[1,"Pot"]].map(([f,l])=>`<button class="b sm" type="button" data-size="${Math.min(maxTo,Math.max(minTo,sizeFor(P,f)))}">${l}</button>`).join("")}
@@ -508,7 +604,10 @@ function setPicked(card){const {kind,i,k}=picker;sendOp({t:"pick",kind,i,k,card}
 
 /* ---------- events ---------- */
 document.addEventListener("click",e=>{
+  if(!e.target.closest("#toolsWrap")&&!$("#toolsMenu").hidden){$("#toolsMenu").hidden=true;$("#toolsBtn").setAttribute("aria-expanded","false")}
   const t=e.target.closest("button"); if(!t) return;
+  if(t.id==="toolsBtn"){const m=$("#toolsMenu");m.hidden=!m.hidden;t.setAttribute("aria-expanded",String(!m.hidden));return}
+  if(t.dataset.poll){pollClick(t);return}
   if(t.closest("#solverRoot")) return;
   if(t.dataset.viewMode){setView(t.dataset.viewMode);return}
   if(t.dataset.svload!=null&&SV){const P=view();const sp=P&&(P.spots||[])[+t.dataset.svload];if(sp){SV.loadTableSpot(sp,P);if(viewMode==="table") setView(window.innerWidth>=1100?"both":"solver")}return}
@@ -568,8 +667,10 @@ document.addEventListener("input",e=>{
   if(t.id==="amtRange"){$("#amtNum").value=t.value;updRaiseLabel()}
   else if(t.id==="amtNum"){const r=$("#amtRange");if(r) r.value=t.value;updRaiseLabel()}
   else if(t.id==="homeName"){myName=t.value.slice(0,16);lsSet("hsp-name",myName)}
+  else if(t.dataset.pin){pollInput(t)}
 });
 document.addEventListener("change",e=>{
+  if(e.target.dataset.tool){setTool(e.target.dataset.tool,e.target.checked);return}
   const t=e.target; if(!mode||!isT()) return;
   if(t.dataset.rule){const k=t.dataset.rule;sendOp({t:"rule",k,v:t.type==="checkbox"?t.checked:t.tagName==="SELECT"&&k!=="clock"?t.value:+t.value});return}
   if(t.dataset.name!=null){sendOp({t:"name",i:+t.dataset.name,v:t.value})}
