@@ -613,8 +613,7 @@ export function createSolver(root, opt = {}) {
     }
     if (t.dataset.deal !== undefined) {
       const id = +t.dataset.deal, k = boardFor(path).length;
-      const pushed = canPushCard(k);
-      if (pushed) TB.push(k, cardStr(id));
+      const pushed = canPushCard(k) && TB.push(k, cardStr(id)) !== false;
       go(path.concat({ hist: path[path.length - 1].hist.concat(id), label: cardLabel(id), card: id }), pushed);
       return;
     }
