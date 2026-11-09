@@ -98,7 +98,7 @@ export function createEngine(opts={}){
     const ready=readySeat, n=readyCount(), r=G.rules;
     if(n<2){msg("Need at least two seated players with chips.");return false}
     if(G.hand>0||!ready(G.button)) G.button=nextSeat(G.button,ready);
-    G.hand++; G.board=[]; G.board2=null; G.ritOn=false; G.ritFrom=0; G.result=""; G.handRake=0; G.bomb=false; G.spots=[]; G.pf=[];
+    G.hand++; G.board=[]; G.board2=null; G.ritOn=false; G.ritFrom=0; G.result=""; G.handRake=0; G.bomb=false; G.spots=[]; G.pf=[]; G.line=[];
     G.phase="preflop"; G.curBet=G.blinds.bb; G.minRaise=G.blinds.bb;
     const pre=G.seats.map(s=>s.pre.slice());
     for(let i=0;i<9;i++){const s=S(i);Object.assign(s,{cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false})}
@@ -160,7 +160,9 @@ export function createEngine(opts={}){
       G.curBet=to;
       log(`${label(i)} ${wasBet?"bets":"raises to"} ${money(to)}${s.allin?" (all-in)":""}`);
       if(G.phase==="preflop"){(G.pf=G.pf||[]).push(i)}
+      else (G.line=G.line||[]).push({st:G.phase,i,a:wasBet?"bet":"raise",to:s.bet,all:!!s.allin});
     } else return false;
+    if(type!=="raise"&&type!=="allin"&&G.phase!=="preflop") (G.line=G.line||[]).push({st:G.phase,i,a:type,to:s.bet,all:!!s.allin});
     s.acted=true;
     if(liveCount()===1){winByFold();return true}
     if(roundDone()) advanceStreet(); else setToAct(nextSeat(i,canAct));
@@ -324,7 +326,7 @@ export function createEngine(opts={}){
     const r=G.rules;
     return {v:3,lname:G.lname,size:G.size,blinds:G.blinds,hand:G.hand,button:G.button,phase:G.phase,toAct:G.toAct,turn:G.turn,curBet:G.curBet,minRaise:G.minRaise,
       board:G.board,board2:G.board2,result:G.result,log:G.log.slice(-50),reveal:!!G.revealAll,deadline:G.deadline,
-      rules:{anteType:r.anteType,ante:r.ante,straddle:r.straddle,straddleAmt:r.straddleAmt,rakePct:r.rakePct,rakeCap:r.rakeCap,nfnd:r.nfnd,rit:r.rit,clock:r.clock,bombAmt:r.bombAmt,solverStudents:r.solverStudents||"between"},spots:G.spots||[],
+      rules:{anteType:r.anteType,ante:r.ante,straddle:r.straddle,straddleAmt:r.straddleAmt,rakePct:r.rakePct,rakeCap:r.rakeCap,nfnd:r.nfnd,rit:r.rit,clock:r.clock,bombAmt:r.bombAmt,solverStudents:r.solverStudents||"between"},spots:G.spots||[],line:G.line||[],
       straddleNext:G.straddleNext,bombNext:G.bombNext,bomb:G.bomb,handRake:G.handRake,
       seats:G.seats.map(s=>({name:s.name,stack:s.stack,uid:s.uid,out:s.out,bet:s.bet,total:s.total,folded:s.folded,allin:s.allin,has:!!s.cards,
         cards:(s.cards&&(G.revealAll||s.shown))?s.cards:null}))};
