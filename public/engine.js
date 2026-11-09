@@ -37,7 +37,7 @@ export function cmp(a,b){for(let i=0;i<Math.max(a.length,b.length);i++){const d=
 
 /* ---------- game options ---------- */
 export function defaultRules(){
-  return {anteType:"none",ante:1,straddle:false,straddleAmt:4,rakePct:0,rakeCap:5,nfnd:true,rit:false,clock:0,bombAmt:5};
+  return {anteType:"none",ante:1,straddle:false,straddleAmt:4,rakePct:0,rakeCap:5,nfnd:true,rit:false,clock:0,bombAmt:5,solverStudents:"between"};
 }
 const CLOCKS=[0,15,20,30,45,60,90,120];
 function setRule(r,k,v){
@@ -53,6 +53,7 @@ function setRule(r,k,v){
     case "rit": r.rit=!!v; return true;
     case "clock": if(!CLOCKS.includes(n)) return false; r.clock=n; return true;
     case "bombAmt": r.bombAmt=Math.max(1,Math.min(100000,n)); return true;
+    case "solverStudents": if(!["off","between","always"].includes(v)) return false; r.solverStudents=v; return true;
   }
   return false;
 }
@@ -62,6 +63,13 @@ export function freshGame(lname){
     board:[],board2:null,ritOn:false,ritFrom:0,plan:[null,null,null,null,null],revealAll:false,keepSetup:false,log:[],result:"",
     rules:defaultRules(),straddleNext:false,bombNext:false,bomb:false,rakeTotal:0,handRake:0,deadline:null,clockTurn:null,
     seats:Array.from({length:9},(_,i)=>({name:NAMES[i],stack:200,uid:null,out:false,pre:[null,null],cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false}))};
+}
+
+/* position names, in order from the button, for n dealt players */
+export function posNames(n){
+  if(n<=2) return ["BTN","BB"];
+  const m=n-3;
+  return ["BTN","SB","BB",...(m<=3?["UTG","HJ","CO"].slice(3-m):["UTG",...["UTG+1","UTG+2"].slice(0,m-4),"LJ","HJ","CO"])];
 }
 
 /* ---------- the engine: one per table ---------- */
@@ -90,7 +98,7 @@ export function createEngine(opts={}){
     const ready=readySeat, n=readyCount(), r=G.rules;
     if(n<2){msg("Need at least two seated players with chips.");return false}
     if(G.hand>0||!ready(G.button)) G.button=nextSeat(G.button,ready);
-    G.hand++; G.board=[]; G.board2=null; G.ritOn=false; G.ritFrom=0; G.result=""; G.handRake=0; G.bomb=false;
+    G.hand++; G.board=[]; G.board2=null; G.ritOn=false; G.ritFrom=0; G.result=""; G.handRake=0; G.bomb=false; G.spots=[]; G.pf=[];
     G.phase="preflop"; G.curBet=G.blinds.bb; G.minRaise=G.blinds.bb;
     const pre=G.seats.map(s=>s.pre.slice());
     for(let i=0;i<9;i++){const s=S(i);Object.assign(s,{cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false})}
@@ -99,6 +107,8 @@ export function createEngine(opts={}){
     for(let i=0;i<G.size;i++) if(ready(i)){const c=S(i).cards;for(let k=0;k<2;k++) if(!c[k]) c[k]=draw()}
     if(G.keepSetup) G.seats.forEach((s,i)=>{if(pre[i]) s.keep=pre[i]});
     log(`— Hand #${G.hand} · button ${label(G.button)}`);
+    {const dealt=[];let j=G.button;for(let k=0;k<G.size;k++){if(S(j).cards) dealt.push(j);j=(j+1)%G.size}
+     const names=posNames(dealt.length);G.pos={};dealt.forEach((j,k)=>{G.pos[j]=names[k]})}
     if(G.bombNext){
       G.bombNext=false; G.straddleNext=false; G.bomb=true; G.curBet=0;
       const amt=Math.max(1,r.bombAmt|0);
@@ -149,6 +159,7 @@ export function createEngine(opts={}){
       if(inc>=G.minRaise){G.minRaise=inc; G.seats.forEach((o,j)=>{if(j!==i) o.acted=false})}
       G.curBet=to;
       log(`${label(i)} ${wasBet?"bets":"raises to"} ${money(to)}${s.allin?" (all-in)":""}`);
+      if(G.phase==="preflop"){(G.pf=G.pf||[]).push(i)}
     } else return false;
     s.acted=true;
     if(liveCount()===1){winByFold();return true}
@@ -166,9 +177,16 @@ export function createEngine(opts={}){
       }
       G.phase=order[idx+1]; dealTo({flop:3,turn:4,river:5}[G.phase]);
       log(`${STREETS[G.phase]}: ${G.board.map(pretty).join(" ")}`);
-      if(range().filter(canAct).length>=2){setToAct(nextSeat(G.button,canAct));return}
+      if(range().filter(canAct).length>=2){noteSpot();setToAct(nextSeat(G.button,canAct));return}
       setToAct(null);
     }
+  }
+  /* what the solver needs about the start of each street with a decision */
+  function noteSpot(){
+    const lv=range().filter(live).sort((a,b)=>(a-G.button-1+G.size)%G.size-(b-G.button-1+G.size)%G.size);
+    const pf=G.pf||[], agg=pf.length?pf[pf.length-1]:null;
+    (G.spots=G.spots||[]).push({st:G.phase,board:G.board.slice(),pot:G.seats.reduce((a,s)=>a+s.total,0),bomb:!!G.bomb,raises:pf.length,
+      pl:lv.map(i=>({i,name:S(i).name,stack:S(i).stack,pos:(G.pos||{})[i]||"",agg:i===agg}))});
   }
   function pots(){
     const contrib=G.seats.map((s,i)=>i<G.size?s.total:0);
@@ -306,7 +324,7 @@ export function createEngine(opts={}){
     const r=G.rules;
     return {v:3,lname:G.lname,size:G.size,blinds:G.blinds,hand:G.hand,button:G.button,phase:G.phase,toAct:G.toAct,turn:G.turn,curBet:G.curBet,minRaise:G.minRaise,
       board:G.board,board2:G.board2,result:G.result,log:G.log.slice(-50),reveal:!!G.revealAll,deadline:G.deadline,
-      rules:{anteType:r.anteType,ante:r.ante,straddle:r.straddle,straddleAmt:r.straddleAmt,rakePct:r.rakePct,rakeCap:r.rakeCap,nfnd:r.nfnd,rit:r.rit,clock:r.clock,bombAmt:r.bombAmt},
+      rules:{anteType:r.anteType,ante:r.ante,straddle:r.straddle,straddleAmt:r.straddleAmt,rakePct:r.rakePct,rakeCap:r.rakeCap,nfnd:r.nfnd,rit:r.rit,clock:r.clock,bombAmt:r.bombAmt,solverStudents:r.solverStudents||"between"},spots:G.spots||[],
       straddleNext:G.straddleNext,bombNext:G.bombNext,bomb:G.bomb,handRake:G.handRake,
       seats:G.seats.map(s=>({name:s.name,stack:s.stack,uid:s.uid,out:s.out,bet:s.bet,total:s.total,folded:s.folded,allin:s.allin,has:!!s.cards,
         cards:(s.cards&&(G.revealAll||s.shown))?s.cards:null}))};
