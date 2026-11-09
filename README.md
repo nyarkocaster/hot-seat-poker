@@ -45,6 +45,7 @@ Cloudflare → your Worker → **Settings** → **Domains & Routes** → **Add**
 - **Co-teachers:** they open the site, click **Teach** on the lobby, and enter the teacher code.
 - **Students:** they open the site (or the lobby link from the People tab), type a name, click **Join as student**, and tap an open seat. Each student's browser remembers them, so a reload keeps their seat.
 - **Game options:** Table setup tab. "Straddle next hand" and "Bomb pot next hand" are in the action bar between hands.
+- **Solver:** once a hand reaches the flop with two players, a **Solver** panel under the action bar opens that street in a new tab with the board, pot and stacks filled in. Pick ranges (a guess from the preflop action is preloaded), choose bet sizes, and press **Solve**. It runs in the visitor's own browser, so it costs nothing to host. Teachers choose when students may open it (Table setup → Teaching). You can also go straight to `/solver/`.
 - **Delete a lobby:** home page → **Teach** on the lobby → enter the code → **Delete this lobby…**
 
 ## Free plan limits
@@ -54,4 +55,6 @@ Cloudflare's free plan allows about 100,000 server requests a day. Messages are 
 - `public/engine.js`: game engine (pure JS, shared by server and browser)
 - `public/app.js`, `public/index.html`, `public/style.css`: the page
 - `src/worker.js`: Cloudflare Worker with two Durable Objects. `Lobby` runs one table, talks WebSockets and keeps state in SQLite storage. `Directory` keeps the lobby list.
+- `public/solver/`: the solver page. `solver/` holds the Rust wrapper around [postflop-solver](https://github.com/b-inary/postflop-solver) (Wataru Inariba, AGPL-3.0). The GitHub Action in `.github/workflows/solver.yml` compiles it to WebAssembly whenever `solver/` changes and commits the result to `public/solver/pkg-mt` (multi-threaded) and `public/solver/pkg-st` (single-threaded, used by Safari). `public/_headers` turns on the cross-origin isolation the threaded version needs.
+- License: GNU AGPL v3 (see LICENSE), because the solver engine is AGPL. Anyone running a modified copy publicly must share their source.
 - `npm install`, then `npm run dev` for a local server at http://localhost:8787, `npm test` for 300 random hands with chip-balance checks, and `npm run deploy` to deploy from your own machine.
