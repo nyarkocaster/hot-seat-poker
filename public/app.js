@@ -157,7 +157,7 @@ function renderNow(){
   }
   $("#stakeChip").hidden=false; $("#stakeChip").textContent=`${money(P.blinds.sb)}/${money(P.blinds.bb)} NLHE · ${P.size}-max`;
   mySeat=T?-1:P.seats.findIndex(s=>s.uid===ME.cid);
-  renderTable(P,T); renderAct(P,T);
+  renderTable(P,T); renderAct(P,T); renderSolve(P,T);
   setHTML($("#log"),P.log.slice().reverse().map(t=>`<li>${esc(t)}</li>`).join("")||`<li class="muted">No hands yet.</li>`);
   if(T) renderTeacherSide(); else setSide(studentSide(P));
   if(picker&&!T) picker=null;
@@ -259,6 +259,25 @@ function renderAct(P,T){
       <button class="b sm" type="button" data-size="${minTo}">Min</button><button class="b sm" type="button" data-size="${maxTo}">All-in</button></div>`:""}
   </div>`);
 }
+/* links that open a street of this hand in the solver (heads-up spots only, no hole cards sent) */
+function solverLink(P,sp){
+  const r=P.rules||{};
+  const data={hand:P.hand,b:sp.board,pot:sp.pot,raises:sp.raises,bomb:sp.bomb,pl:sp.pl.map(p=>({name:p.name,pos:p.pos,stack:p.stack,agg:p.agg})),rake:{pct:r.rakePct||0,cap:r.rakeCap||0}};
+  const b64=btoa(unescape(encodeURIComponent(JSON.stringify(data)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  return "/solver/#s="+b64;
+}
+function renderSolve(P,T){
+  const el=$("#solvePanel"); const spots=P.spots||[];
+  const who=(P.rules&&P.rules.solverStudents)||"between", between=P.phase==="idle"||P.phase==="done";
+  const allowed=T||who==="always"||(who==="between"&&between);
+  if(!allowed||!spots.length){el.hidden=true;setHTML(el,"");return}
+  el.hidden=false;
+  const NAME={flop:"flop",turn:"turn",river:"river"};
+  const btns=spots.map(sp=>sp.pl.length===2
+    ?`<a class="b sm" href="${solverLink(P,sp)}" target="_blank" rel="noopener">Solve the ${NAME[sp.st]} <span class="muted">· ${esc(sp.pl[0].pos)} vs ${esc(sp.pl[1].pos)}</span></a>`
+    :`<span class="chip">${NAME[sp.st]}: ${sp.pl.length} players, the solver needs exactly two</span>`).join("");
+  setHTML(el,`<h2>Solver</h2><div class="row">${btns}</div><p class="note">Opens in a new tab with this hand's board, pot and stacks. Ranges start as a guess from the preflop action; edit them there. Big flop spots need a computer with plenty of memory.</p>`);
+}
 /* shot clock countdown, updated in place without redrawing the page */
 function tick(){
   const P=mode?view():null; const dl=P&&P.deadline&&P.toAct!=null?P.deadline:null;
@@ -308,6 +327,7 @@ function renderTeacherSide(){
       <p class="note">When time runs out the player checks if they can, otherwise folds.</p></div>
     <div class="group"><h3>Teaching</h3>
       <div class="row">${revealBtn()}<span class="note">Shows every hand to students, folded ones too.</span></div>
+      <div class="fields" style="margin-top:8px"><div class="field" style="grid-column:1/-1"><label for="solverSel">Students can open the solver</label><select id="solverSel" data-rule="solverStudents">${[["off","Never (teachers only)"],["between","Between hands"],["always","Any time, even mid-hand"]].map(([v,l])=>`<option value="${v}"${(r.solverStudents||"between")===v?" selected":""}>${l}</option>`).join("")}</select></div></div>
       <label class="toggle"><input type="checkbox" id="keepSetup"${G.keepSetup?" checked":""}><span>Keep my card setup for the next hand<br><span class="note">Replays the same hole cards so students can try other lines. Board cards you set are used once.</span></span></label>
       <div class="row" style="margin-top:8px">${!between()?`<button class="b" type="button" data-cmd="voidhand">Cancel this hand</button>`:""}
       ${confirmReset?`<span class="confirm"><span>Reset table, stacks and log?</span><button class="b sm warn" type="button" data-cmd="reset">Reset</button><button class="b sm" type="button" data-cmd="noreset">Keep</button></span>`:`<button class="b warn" type="button" data-cmd="askreset">Reset table…</button>`}</div></div></div>`;
