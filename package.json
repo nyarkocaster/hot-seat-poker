@@ -1,0 +1,15 @@
+{
+  "name": "hot-seat-poker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A live poker teaching table: teachers set every card, students take a seat and play.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node test/engine.test.mjs 300"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  }
+}
