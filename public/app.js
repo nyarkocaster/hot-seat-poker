@@ -1,5 +1,6 @@
 // Hot Seat Poker page: lobby list, table, teacher controls, live connection to the lobby server.
 import {createEngine,freshGame,RANKS,SYM,STREETS,money,pretty} from "./engine.js";
+import {createSolver} from "./solver/core.js";
 
 const $=s=>document.querySelector(s);
 const esc=t=>String(t==null?"":t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -50,6 +51,29 @@ function onMsg(m){
   else if(m.t==="cur"){if(!m.cur&&!(m.busy&&m.busy.length)) curs.delete(m.peer); else curs.set(m.peer,m);drawCursors();if(picker) render()}
   else if(m.t==="error"){lastErr=m.msg||"";if(m.msg) flash(m.msg)}
   else if(m.t==="deleted"){lastErr="This lobby was deleted."}
+  else if(m.t==="sv"||m.t==="svq"||m.t==="sva"){
+    if(m.t==="sv"&&m.off){svOn=false;render();return}
+    if(m.t==="sv"&&m.on){svOn=true;render()}
+    if(SV) SV.onMessage(m);
+  }
+}
+
+/* ---------- the solver, in this window ---------- */
+let SV=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
+function mountSolver(){
+  const root=$("#solverRoot"); root.innerHTML=""; root.className="";
+  const transport=mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},peer:()=>myPeer,name:()=>myName||"Someone",canEdit:()=>isT()||svOn}:null;
+  SV=createSolver(root,{transport,anchors:mode==="lobby",table:{current:()=>view(),canPush:()=>isT(),push:(k,card)=>{sendOp({t:"pick",kind:"board",k,card});flash(`${k===3?"Turn":"River"} set to ${pretty(card)} on the table`)}}});
+  svOn=mode==="local";
+}
+const solverAllowed=()=>!!mode&&(isT()||svOn);
+function setView(v){viewMode=v;lsSet("hsp-view",v);render()}
+function applyView(){
+  const ok=solverAllowed(), v=ok?viewMode:"table";
+  document.body.classList.toggle("v-table",v==="table");document.body.classList.toggle("v-solver",v==="solver");document.body.classList.toggle("v-both",v==="both");
+  $("#solverPane").hidden=!mode||v==="table";
+  const sw=$("#viewSwitch"); sw.hidden=!ok;
+  sw.querySelectorAll("[data-view-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.viewMode===v)));
 }
 
 function enterLobby(id,role,code){
@@ -60,7 +84,7 @@ function enterLobby(id,role,code){
   leaveLobby(true);
   const d=(homeList||[]).find(x=>x.id===id);
   mode="lobby"; ROLE=role; TCODE=code||""; L={id,name:d?d.name:id.toUpperCase()};
-  wantWs=true; retry=0; lastErr=""; welcomed=false; connect();
+  wantWs=true; retry=0; lastErr=""; welcomed=false; mountSolver(); connect();
   pingT=setInterval(()=>{if(ws&&wsOpen) ws.send('{"t":"ping"}')},25000);
   setHash("lobby-"+id); updateConn(); render();
 }
@@ -68,13 +92,13 @@ function leaveLobby(quiet){
   wantWs=false; clearTimeout(retryT); clearInterval(pingT); clearTimeout(localClockT);
   if(ws){try{ws.close()}catch(e){}} ws=null; wsOpen=false;
   mode=null; ROLE=null; L=null; TCODE=""; PUB=null; MINE=null; HIST=0; peers=[]; myPeer=null; curs.clear(); welcomed=false;
-  E.G=null; E.history.length=0; picker=null; sideTab="seats"; confirmReset=false; myBusy="[]";
+  E.G=null; E.history.length=0; picker=null; sideTab="seats"; confirmReset=false; myBusy="[]"; SV=null; svOn=false; $("#solverRoot").innerHTML="";
   if(!quiet){setHash("");loadLobbies();updateConn();render()}
 }
 function enterLocal(){
   leaveLobby(true); mode="local"; ROLE="teacher"; L={id:"",name:"Practice table"};
   E.G=freshGame("Practice table"); E.G.seats[0].pre=["As","Kh"]; E.startHand(); E.history.length=0;
-  updateConn(); render();
+  mountSolver(); updateConn(); render();
 }
 function sendOp(op){
   if(!isT()) return;
@@ -148,7 +172,7 @@ function renderNow(){
   $("#themeBtn").textContent=document.documentElement.dataset.theme==="light"?"Dark mode":"Light mode";
   const lc=$("#lobbyChip"); lc.hidden=!inL; if(inL) lc.textContent=mode==="local"?"Practice table":`${(E.G&&E.G.lname)||(PUB&&PUB.lname)||L.name} · ${L.id.toUpperCase()}`;
   const rc=$("#roleChip"); rc.hidden=!inL; rc.textContent=ROLE==="teacher"?"Teacher":"Student";
-  if(!inL){$("#stakeChip").hidden=true;renderHome();drawPicker();drawCursors();return}
+  if(!inL){$("#stakeChip").hidden=true;applyView();renderHome();drawPicker();drawCursors();return}
   const T=isT(), P=view();
   if(!P){
     setHTML($("#table"),`<div class="rail"></div><div class="felt"></div><div class="center"><div class="street">Connecting</div><div class="result">Opening the table…</div></div>`);
@@ -157,7 +181,7 @@ function renderNow(){
   }
   $("#stakeChip").hidden=false; $("#stakeChip").textContent=`${money(P.blinds.sb)}/${money(P.blinds.bb)} NLHE · ${P.size}-max`;
   mySeat=T?-1:P.seats.findIndex(s=>s.uid===ME.cid);
-  renderTable(P,T); renderAct(P,T); renderSolve(P,T);
+  renderTable(P,T); renderAct(P,T); renderSolve(P,T); applyView(); if(SV) SV.tableUpdate(P);
   setHTML($("#log"),P.log.slice().reverse().map(t=>`<li>${esc(t)}</li>`).join("")||`<li class="muted">No hands yet.</li>`);
   if(T) renderTeacherSide(); else setSide(studentSide(P));
   if(picker&&!T) picker=null;
@@ -259,24 +283,18 @@ function renderAct(P,T){
       <button class="b sm" type="button" data-size="${minTo}">Min</button><button class="b sm" type="button" data-size="${maxTo}">All-in</button></div>`:""}
   </div>`);
 }
-/* links that open a street of this hand in the solver (heads-up spots only, no hole cards sent) */
-function solverLink(P,sp){
-  const r=P.rules||{};
-  const data={hand:P.hand,b:sp.board,pot:sp.pot,raises:sp.raises,bomb:sp.bomb,pl:sp.pl.map(p=>({name:p.name,pos:p.pos,stack:p.stack,agg:p.agg})),rake:{pct:r.rakePct||0,cap:r.rakeCap||0}};
-  const b64=btoa(unescape(encodeURIComponent(JSON.stringify(data)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-  return "/solver/#s="+b64;
-}
+/* the Solver panel under the action bar: load a street of this hand into the solver (heads-up only, no hole cards) */
 function renderSolve(P,T){
   const el=$("#solvePanel"); const spots=P.spots||[];
   const who=(P.rules&&P.rules.solverStudents)||"between", between=P.phase==="idle"||P.phase==="done";
-  const allowed=T||who==="always"||(who==="between"&&between);
+  const allowed=mode==="local"||T||(svOn&&(who==="always"||(who==="between"&&between)));
   if(!allowed||!spots.length){el.hidden=true;setHTML(el,"");return}
   el.hidden=false;
   const NAME={flop:"flop",turn:"turn",river:"river"};
-  const btns=spots.map(sp=>sp.pl.length===2
-    ?`<a class="b sm" href="${solverLink(P,sp)}" target="_blank" rel="noopener">Solve the ${NAME[sp.st]} <span class="muted">· ${esc(sp.pl[0].pos)} vs ${esc(sp.pl[1].pos)}</span></a>`
+  const btns=spots.map((sp,i)=>sp.pl.length===2
+    ?`<button class="b sm" type="button" data-svload="${i}">Open the ${NAME[sp.st]} in the solver <span class="muted">· ${esc(sp.pl[0].pos)} vs ${esc(sp.pl[1].pos)}</span></button>`
     :`<span class="chip">${NAME[sp.st]}: ${sp.pl.length} players, the solver needs exactly two</span>`).join("");
-  setHTML(el,`<h2>Solver</h2><div class="row">${btns}</div><p class="note">Opens in a new tab with this hand's board, pot and stacks. Ranges start as a guess from the preflop action; edit them there. Big flop spots need a computer with plenty of memory.</p>`);
+  setHTML(el,`<h2>Solver</h2><div class="row">${btns}</div><p class="note">Loads this hand's board, pot and stacks into the solver${mode==="lobby"?", shared with everyone here who can see it":""}. Ranges start as a guess from the preflop action. While it follows the table, cards and bets dealt here move the solver along with the hand.</p>`);
 }
 /* shot clock countdown, updated in place without redrawing the page */
 function tick(){
@@ -394,14 +412,15 @@ function updateConn(){
 let curOut=null, curT=0, curTimer=null, myBusy="[]", curRaf=0;
 const ancEl=a=>typeof a==="string"&&/^[a-z]{2,8}\d?$/.test(a)?document.querySelector(`[data-anc="${a}"]`):null;
 document.addEventListener("pointermove",e=>{
-  if(mode!=="lobby"||!isT()) return;
-  const el=e.target&&e.target.closest&&e.target.closest("[data-anc]"); let c=null;
+  if(mode!=="lobby"||!(isT()||svOn)) return;
+  let el=e.target&&e.target.closest&&e.target.closest("[data-anc]"); let c=null;
+  if(!isT()&&el&&!/^sv/.test(el.dataset.anc)) el=null;
   if(el){const r=el.getBoundingClientRect(); if(r.width&&r.height) c={a:el.dataset.anc,x:+((e.clientX-r.left)/r.width).toFixed(3),y:+((e.clientY-r.top)/r.height).toFixed(3)}}
   curOut=c; sendCur();
 },{passive:true});
 document.documentElement.addEventListener("pointerleave",()=>{curOut=null;sendCur()});
 function sendCur(now){
-  if(mode!=="lobby"||ROLE!=="teacher"||!ws||!wsOpen) return;
+  if(mode!=="lobby"||!(ROLE==="teacher"||svOn)||!ws||!wsOpen) return;
   if(curTimer&&!now) return;
   const go=()=>{curTimer=null;curT=Date.now();if(ws&&wsOpen) ws.send(JSON.stringify({t:"cur",cur:curOut,busy:JSON.parse(myBusy)}))};
   if(now){clearTimeout(curTimer);go();return}
@@ -429,7 +448,7 @@ function drawCursorsNow(){
     if(T&&Array.isArray(c.busy)) for(const a of c.busy){const el=ancEl(a);if(!el) continue;const r=el.getBoundingClientRect();if(!r.width) continue;
       h+=`<div class="busy" style="left:${r.left-3}px;top:${r.top-3}px;width:${r.width+6}px;height:${r.height+6}px;border-color:${col}"><span style="background:${col}">${nm} is editing</span></div>`}
     const p=c.cur; if(!p||typeof p.a!=="string") continue;
-    if(!T&&!/^(seat\d|board)$/.test(p.a)) continue;
+    if(!T&&!/^(seat\d|board|sv[a-z]*)$/.test(p.a)) continue;
     const el=ancEl(p.a); if(!el) continue; const r=el.getBoundingClientRect(); if(!r.width) continue;
     const x=r.left+p.x*r.width, y=r.top+p.y*r.height;
     h+=`<div class="tcur" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px"><svg width="16" height="20" viewBox="0 0 16 20" aria-hidden="true"><path d="M1.5 1.5v14.5l4-3.6 2.8 6.1 2.8-1.2-2.7-6h5.6z" fill="${col}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg><span class="cn" style="background:${col}">${nm}</span></div>`;
@@ -465,6 +484,9 @@ function setPicked(card){const {kind,i,k}=picker;sendOp({t:"pick",kind,i,k,card}
 /* ---------- events ---------- */
 document.addEventListener("click",e=>{
   const t=e.target.closest("button"); if(!t) return;
+  if(t.closest("#solverRoot")) return;
+  if(t.dataset.viewMode){setView(t.dataset.viewMode);return}
+  if(t.dataset.svload!=null&&SV){const P=view();const sp=P&&(P.spots||[])[+t.dataset.svload];if(sp){SV.loadTableSpot(sp,P);if(viewMode==="table") setView(window.innerWidth>=1100?"both":"solver")}return}
   if(t.closest("#modal")){
     if(!picker) return;
     if(t.dataset.slot!=null){picker.k=+t.dataset.slot;drawPicker()}
