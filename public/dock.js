@@ -13,10 +13,12 @@ const UNITS = [
   { id: "svrun", title: "Solve", sel: ["#sv-pRun"] },
   { id: "svres", title: "Results", sel: ["#sv-pRes"] },
   { id: "notes", title: "Notes", sel: ["#notesPanel"] },
+  { id: "odds", title: "Odds calculator", sel: ["#oddsPanel"] },
+  { id: "stove", title: "Poker stove", sel: ["#stovePanel"] },
 ];
 const DEFAULTS = {
-  both: [["table", "log", "side"], ["svspot", "svrange", "svsizes", "svrun", "svres", "notes"]],
-  solver: [["svspot", "svrange", "svsizes", "svrun"], ["svres", "notes"]],
+  both: [["table", "odds", "stove", "log", "side"], ["svspot", "svrange", "svsizes", "svrun", "svres", "notes"]],
+  solver: [["svspot", "svrange", "svsizes", "svrun", "odds", "stove"], ["svres", "notes"]],
 };
 
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
