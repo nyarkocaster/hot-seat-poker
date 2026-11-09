@@ -257,3 +257,94 @@ body.dragging .dcol{outline:2px dashed var(--line);outline-offset:5px}
 .nbfoot{justify-content:flex-end}
 .nb > h2{margin-bottom:10px}
 #solverPane > .nb{margin-top:20px}
+
+/* Tools menu in the header */
+.toolsw{position:relative;display:inline-flex}
+.toolsmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;display:flex;flex-direction:column;gap:10px;width:min(320px,86vw);padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.35)}
+.toolsmenu .toggle{align-items:flex-start}
+.toolsmenu .toggle span{line-height:1.35}
+.toolsmenu .note{margin:0;font-size:12px}
+
+/* odds calculator */
+.ocalc{display:flex;flex-direction:column;gap:12px}
+.ofollow{gap:12px;align-items:center;flex-wrap:wrap}
+.oseat{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.ofields{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end}
+.ofields label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:110px;flex:1 1 110px}
+.ofields input,.ofields select{width:100%}
+.osec{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--bg) 45%,transparent)}
+.osec h3{margin:0;font-family:var(--f-display);font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.eqn{display:grid;gap:2px;padding:7px 10px;border-left:3px solid var(--brass);background:var(--panel);border-radius:0 8px 8px 0}
+.eqn.short{border-left-color:var(--line);opacity:.9}
+.eqn.good{border-left-color:var(--ok)}
+.eqn.bad{border-left-color:var(--danger)}
+.eqname{font-weight:600;font-size:13px}
+.eqwords{font-size:12.5px;color:var(--muted);font-style:italic}
+.eqnums{font:500 14px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.eqnums b{font-size:15px;color:var(--ink);background:color-mix(in srgb,var(--brass) 22%,transparent);padding:0 5px;border-radius:4px}
+.why{font-size:12.5px;color:var(--muted);margin:0;line-height:1.45}
+.oinfo{margin:0;font-size:13.5px}
+.overdict{font-weight:600;padding:8px 10px;border-radius:8px;font-size:14px}
+.overdict.ok{background:color-mix(in srgb,var(--ok) 18%,transparent)}
+.overdict.bad{background:color-mix(in srgb,var(--danger) 16%,transparent)}
+.ooutsrow{gap:8px;align-items:center;flex-wrap:wrap}
+.ooutsrow label{display:inline-flex;gap:6px;align-items:center;font-size:13px}
+.ooutsrow input{width:70px}
+.ochips{display:flex;flex-wrap:wrap;gap:4px}
+.ohz{gap:8px;align-items:center}
+.oown{display:inline-flex;gap:6px;align-items:center;font-size:13px}
+.oown input{width:90px}
+.tcard{display:inline-block;font-weight:700;padding:0 3px;margin:0 1px;border:1px solid var(--line);border-radius:4px;background:var(--bg);font-size:12.5px;line-height:1.5}
+.tcard.h{color:var(--s-h)}.tcard.d{color:var(--s-d)}.tcard.c{color:var(--s-c)}
+.osec .seg{align-self:flex-start}
+
+/* poker stove */
+.stove{display:flex;flex-direction:column;gap:10px}
+.stools{gap:6px;flex-wrap:wrap}
+.sfields{display:flex;gap:10px;flex-wrap:wrap}
+.sfields label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);flex:1 1 160px}
+.sboard{display:flex;gap:2px;min-height:0}
+.sboard:empty{display:none}
+.srows{display:flex;flex-direction:column;gap:8px}
+.stvrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.stvrow.on{border-color:var(--brass)}
+.sname{grid-column:1/-1;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+.stvrow input{min-width:0;width:100%;font:13px ui-monospace,SFMono-Regular,Menlo,monospace}
+.stvrow select{max-width:110px;font-size:12px}
+.sres{grid-column:1/-1}
+.snums{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;font-size:12.5px;color:var(--muted)}
+.snums b{font-size:20px;color:var(--ink);font-variant-numeric:tabular-nums}
+.sbar{height:8px;border-radius:4px;background:var(--bg);border:1px solid var(--line);overflow:hidden;margin:4px 0}
+.sbar i{display:block;height:100%}
+.sdot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.c0{background:#d9a441}.c1{background:#4f8fd6}.c2{background:#5bb37a}.c3{background:#c8645c}.c4{background:#9a7bd1}.c5{background:#7fb7b0}
+.sstat{flex:1}
+.scats h3{margin:4px 0 6px;font-size:13px}
+.scat{display:grid;grid-template-columns:120px minmax(0,1fr) 54px;gap:8px;align-items:center;font-size:12.5px}
+.scat b{text-align:right;font-variant-numeric:tabular-nums}
+.sx{padding:2px 8px}
+
+/* poll card, always on screen */
+.pollcard{position:fixed;right:16px;bottom:16px;z-index:45;width:min(360px,calc(100vw - 32px));max-height:72vh;overflow:auto;background:var(--panel);border:1px solid var(--brass);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.45);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.pollcard.min{padding:8px 12px}
+.pchead{display:flex;align-items:center;gap:8px}
+.pchead b{font-family:var(--f-display);letter-spacing:.1em;text-transform:uppercase;font-size:13px;color:var(--brass)}
+.pchead .muted{font-size:12px}
+.pcmin{margin-left:auto;border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 6px}
+.pcq{margin:0;font-weight:600;font-size:15px;line-height:1.35}
+.pcopts{display:flex;flex-wrap:wrap;gap:6px}
+.pcopts .b.on{border-color:var(--brass);background:color-mix(in srgb,var(--brass) 22%,transparent)}
+.pclab{font-size:12px;color:var(--muted)}
+.pollcard input[type=text],.pollcard input[type=number]{width:100%}
+.pcwho{margin:0}
+.pcteach{border-top:1px solid var(--line);padding-top:8px;gap:6px}
+.pcres{display:flex;flex-direction:column;gap:3px}
+.pcrow{display:flex;justify-content:space-between;font-size:13.5px}
+.pcbar{height:10px;border-radius:5px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
+.pcbar i{display:block;height:100%;background:var(--brass)}
+.pcnames{display:flex;flex-wrap:wrap;gap:4px}
+.pcnames span{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:1px 8px}
+.pcwhy{font-size:13px;border-top:1px solid var(--line);padding-top:6px}
+.pcwhy p{margin:4px 0}
+.pcwhy span{color:var(--muted)}
+@media (max-width:600px){.pollcard{right:8px;left:8px;bottom:8px;width:auto}}
