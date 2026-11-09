@@ -848,6 +848,16 @@ export function createSolver(root, opt = {}) {
     refresh: render,
     canEdit,
     ranges: () => sv.spot.ranges.slice(),
+    // the two ranges at the spot of the solve on screen, weighted by how often each hand gets there
+    nodeRanges() {
+      if (sv.status !== "ready" || !sv.cards || !sv.solved || !node || !node.r || !node.r.w) return null;
+      const path = curPath(), combos = [0, 1].map(k => {
+        const out = [], cs = sv.cards[k], w = node.r.w[k];
+        for (let i = 0; i < cs.length; i++) if (w[i] > 0.0005) out.push([cs[i] & 255, cs[i] >> 8, w[i]]);
+        return out;
+      });
+      return { board: boardFor(path), combos, at: path.slice(1).map(s => s.label).join(", ") || "the start of the solve", names: sv.spot.names.slice() };
+    },
     names: () => sv.spot.names.slice(),
     setRange(k, text) { if (!canEdit()) return false; const r = sv.spot.ranges.slice(); r[k] = text; editSpot({ ranges: r }); return true; },
     destroy() { ac.abort(); if (engine && !engine.closed && engine.kind === "app") { try { engine.close(); } catch (e) {} } },
