@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hot Seat Poker</title>
+<meta name="description" content="A live poker teaching table: teachers set every card, students take a seat and play.">
+<script>try{var t=localStorage.getItem("hsp-theme");document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){}</script>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/solver/solver.css">
+<style>body{margin:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1><a href="/" class="home-link">Hot Seat Poker</a></h1>
+    <span class="chip" id="lobbyChip" hidden></span>
+    <span class="chip role" id="roleChip" hidden>Teacher</span>
+    <span class="chip" id="connChip"><span class="dot" id="connDot"></span><span id="connTxt">Starting…</span></span>
+    <span class="chip" id="stakeChip" hidden>$1/$2 NLHE</span>
+    <span class="spacer"></span>
+    <span class="seg" id="viewSwitch" role="group" aria-label="Show" hidden><button type="button" data-view-mode="table" aria-pressed="true">Table</button><button type="button" data-view-mode="both" aria-pressed="false">Side by side</button><button type="button" data-view-mode="solver" aria-pressed="false">Solver</button></span>
+    <a class="b sm" href="/learn/" target="_blank" rel="noopener">How it works</a>
+    <button class="b sm" type="button" id="themeBtn">Light mode</button>
+    <button class="b sm" type="button" id="leaveBtn" hidden>Leave lobby</button>
+  </header>
+
+  <section id="home" class="home">
+    <div class="main">
+      <div class="panel"><h2>Lobbies</h2><div class="lobs" id="dirList"><p class="note">Loading lobbies…</p></div></div>
+      <div class="panel" id="teachForm" hidden><h2>Teach <span id="teachName"></span></h2>
+        <p class="note">Enter the teacher code for this lobby. Students join without one.</p>
+        <div class="row"><input type="password" id="teachCode" placeholder="Teacher code" autocomplete="off" aria-label="Teacher code"><button class="b primary" type="button" id="teachGo">Join as teacher</button><button class="b" type="button" id="teachCancel">Cancel</button></div>
+        <div class="row" style="margin-top:10px" id="delRow"><button class="b sm warn" type="button" id="delAsk">Delete this lobby…</button></div>
+      </div>
+      <div class="panel"><h2>Start a lobby</h2>
+        <div class="fields">
+          <div class="field" style="grid-column:1/-1"><label for="newName">Lobby name</label><input type="text" id="newName" maxlength="28" placeholder="Tuesday study group"></div>
+          <div class="field"><label for="newCode">Teacher code</label><input type="text" id="newCode" maxlength="40" autocomplete="off"></div>
+          <div class="field" id="keyField" hidden><label for="newKey">Organizer key</label><input type="password" id="newKey" maxlength="80" autocomplete="off"></div>
+        </div>
+        <p class="note">Give the teacher code only to people who should see every card and run the table with you. You'll need it to come back as a teacher, so write it down.</p>
+        <button class="b primary" type="button" id="createBtn">Create lobby</button>
+      </div>
+    </div>
+    <aside class="main">
+      <div class="panel"><h2>You</h2><div class="field"><label for="homeName">Your name at the table</label><input type="text" id="homeName" maxlength="16" placeholder="Your name"></div></div>
+      <div class="panel"><h2>Practice alone</h2><p class="note">A table that runs on this device only, with no lobby.</p><button class="b" type="button" id="practiceBtn">Open practice table</button></div>
+      <p class="err" id="homeMsg" role="status"></p>
+    </aside>
+  </section>
+
+  <div id="duo">
+  <div class="grid" id="game" hidden>
+    <div class="main">
+      <div class="table" id="table" data-anc="table" aria-label="Poker table"></div>
+      <div class="panel" id="actPanel" data-anc="act"></div>
+      <div class="panel" id="solvePanel" hidden></div>
+      <div class="panel" data-anc="log"><h2>Hand log</h2><ul class="log" id="log"></ul></div>
+    </div>
+    <aside id="side" data-anc="side"></aside>
+  </div>
+  <section id="solverPane" hidden><div id="solverRoot"></div></section>
+  </div>
+</div>
+<div class="modal" id="modal" hidden></div>
+<div id="curLayer" aria-hidden="true"></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
