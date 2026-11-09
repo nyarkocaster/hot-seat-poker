@@ -55,11 +55,11 @@ export class Directory extends DurableObject{
 export class Lobby extends DurableObject{
   constructor(ctx,env){
     super(ctx,env);
-    this.E=createEngine(); this.meta=null; this.toks={}; this.fails=[]; this.curs=new Map(); this.lastDir=""; this.sv=null; this.nb=null;
+    this.E=createEngine(); this.meta=null; this.toks={}; this.fails=[]; this.curs=new Map(); this.lastDir=""; this.sv=null; this.nb=null; this.poll=null;
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}','{"t":"pong"}'));
     ctx.blockConcurrencyWhile(async()=>{
-      const v=await ctx.storage.get(["meta","g","hist","toks","sv","nb"]);
-      this.meta=v.get("meta")||null; this.toks=v.get("toks")||{}; this.sv=v.get("sv")||null; this.nb=v.get("nb")||null;
+      const v=await ctx.storage.get(["meta","g","hist","toks","sv","nb","poll"]);
+      this.meta=v.get("meta")||null; this.toks=v.get("toks")||{}; this.sv=v.get("sv")||null; this.nb=v.get("nb")||null; this.poll=v.get("poll")||null;
       if(v.get("g")) this.E.G=v.get("g");
       (v.get("hist")||[]).forEach(h=>this.E.history.push(h));
     });
@@ -75,7 +75,7 @@ export class Lobby extends DurableObject{
     if(!(await this.checkCode(code))) return {ok:false,error:"That teacher code doesn't match this lobby."};
     id=this.meta.id;
     // Clear this lobby first, so nothing it does while people disconnect can re-list it.
-    this.meta=null; this.E.G=null; this.E.history.length=0; this.toks={}; this.lastDir=""; this.curs.clear(); this.sv=null; this.nb=null;
+    this.meta=null; this.E.G=null; this.E.history.length=0; this.toks={}; this.lastDir=""; this.curs.clear(); this.sv=null; this.nb=null; this.poll=null;
     await dirStub(this.env).remove(id);
     await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll();
     for(const ws of this.ctx.getWebSockets()){try{ws.send(JSON.stringify({t:"deleted"}));ws.close(4004,"Lobby deleted")}catch(e){}}
@@ -119,6 +119,14 @@ export class Lobby extends DurableObject{
     if(ok&&!a.sv){a.sv=true;ws.serializeAttachment(a);this.send(ws,{t:"sv",on:true,full:this.sv});this.send(ws,{t:"nb",full:this.nb})}
     else if(!ok&&a.sv){a.sv=false;ws.serializeAttachment(a);this.send(ws,{t:"sv",off:true})}
   }
+  /* polls: a teacher asks, everyone answers privately, answers show when the teacher reveals them */
+  pollFor(a){
+    const P=this.poll; if(!P) return {t:"poll",poll:null};
+    const ans=Object.entries(P.answers||{});
+    return {t:"poll",poll:{id:P.id,q:P.q,opts:P.opts,amt:P.amt,ctx:P.ctx,revealed:!!P.revealed,n:ans.length,who:ans.map(([,x])=>x.name),
+      mine:(P.answers||{})[a.cid]||null,answers:P.revealed?ans.map(([,x])=>x):null}};
+  }
+  broadcastPoll(){for(const {ws,a} of this.sockets()) this.send(ws,this.pollFor(a))}
   svSockets(except){return this.sockets().filter(x=>x.ws!==except&&x.a.sv&&this.svOk(x.a))}
   broadcastPeers(){
     if(!this.E.G) return;
@@ -163,6 +171,7 @@ export class Lobby extends DurableObject{
       this.send(ws,this.stateFor(a,this.E.pubView()));
       for(const [peer,c] of this.curs) if(peer!==a.peer) this.send(ws,c);
       a.sv=false; ws.serializeAttachment(a); this.svGate(ws,a);
+      this.send(ws,this.pollFor(a));
       this.broadcastPeers(); await this.dirUpdate();
       return;
     }
@@ -178,6 +187,27 @@ export class Lobby extends DurableObject{
       case "act": if(a.role!=="student") return;
         if(E.actFor(a.cid,String(m.a),Number(m.amt)||0)) await this.commit(); else this.send(ws,this.stateFor(a,E.pubView()));
         return;
+      case "poll":{
+        const txt=(v,n)=>String(v==null?"":v).replace(/[\u0000-\u001f\u007f]/g," ").trim().slice(0,n);
+        if(m.op==="ask"){
+          if(a.role!=="teacher") return;
+          const opts=(Array.isArray(m.opts)?m.opts:[]).map(o=>txt(o,30)).filter(Boolean).slice(0,6);
+          if(opts.length<2) return;
+          const amt=(Array.isArray(m.amt)?m.amt:[]).map(Boolean).slice(0,opts.length);
+          this.poll={id:rid(8),q:txt(m.q,160)||"What would you do?",opts,amt,ctx:m.ctx&&typeof m.ctx==="object"?{hand:m.ctx.hand|0,seat:m.ctx.seat|0}:null,revealed:false,answers:{}};
+        } else if(m.op==="answer"){
+          const P=this.poll; if(!P||P.revealed||m.id!==P.id) return;
+          const k=Number(m.a); if(!Number.isInteger(k)||k<0||k>=P.opts.length) return;
+          const amt=P.amt[k]&&Number.isFinite(+m.amt)&&+m.amt>0?Math.round(+m.amt*100)/100:null;
+          if(!P.answers[a.cid]&&Object.keys(P.answers).length>=200) return;
+          P.answers[a.cid]={name:a.name,role:a.role,a:k,amt,why:txt(m.why,140)};
+        } else if(m.op==="reveal"||m.op==="hide"){
+          if(a.role!=="teacher"||!this.poll) return; this.poll.revealed=m.op==="reveal";
+        } else if(m.op==="end"){
+          if(a.role!=="teacher") return; this.poll=null;
+        } else return;
+        await this.ctx.storage.put("poll",this.poll); this.broadcastPoll();
+        return;}
       case "name": a.name=cleanName(m.name)||a.name; ws.serializeAttachment(a); this.broadcastPeers(); return;
       case "cur":{
         let c=m.cur&&typeof m.cur==="object"&&typeof m.cur.a==="string"&&/^[a-z]{2,8}\d?$/.test(m.cur.a)?{a:m.cur.a,x:Math.min(1,Math.max(0,+m.cur.x||0)),y:Math.min(1,Math.max(0,+m.cur.y||0))}:null;
