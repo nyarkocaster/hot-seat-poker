@@ -55,3 +55,19 @@ input[type=text]{width:100%}
 .sfoot a{color:inherit}
 .summary{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin-bottom:8px}
 .summary b{color:var(--ink);font-weight:600}
+
+/* component layout: two columns when there's room, results first when stacked */
+.svroot{container-type:inline-size}
+.svroot .sgrid{grid-template-columns:minmax(0,1fr)}
+.svroot .sv-results{order:-1}
+@container (min-width:860px){.svroot .sgrid{grid-template-columns:minmax(0,420px) minmax(0,1fr)}.svroot .sv-results{order:0}}
+@media (max-width:980px){.svroot .sgrid{grid-template-columns:minmax(0,1fr)}}
+.svroot .rgrid.res .rc{font-size:clamp(8px,1.9cqw,12px)}
+.svroot .rc{font-size:clamp(8px,2.4cqw,12px)}
+@container (min-width:860px){.svroot .rgrid.res .rc{font-size:clamp(8px,1.15cqw,12px)}.svroot .rc{font-size:clamp(8px,1cqw,12px)}}
+.svbar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-bottom:12px}
+.toggle.sm{display:inline-flex;gap:6px;align-items:center;margin:0}
+.linkbtn{background:none;border:0;padding:0;color:var(--brass);text-decoration:underline;cursor:pointer;font:inherit}
+.engline{margin-top:8px}
+.err a{color:inherit}
+.err .b{margin-left:6px}
