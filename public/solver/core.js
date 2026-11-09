@@ -173,7 +173,7 @@ export function createSolver(root, opt = {}) {
   <div class="svbar" id="sv-bar"></div>
   <div class="sgrid">
     <section class="main sv-setup">
-      <div class="panel"${anc("svspot")}>
+      <div class="panel" id="sv-pSpot"${anc("svspot")}>
         <h2>Spot</h2>
         <p class="note" id="sv-note" hidden></p>
         <div class="field"><label>Board <span class="muted">(3 to 5 cards, tap to add or remove)</span></label>
@@ -187,7 +187,7 @@ export function createSolver(root, opt = {}) {
           <div class="field"><label for="sv-rakeCap">Rake cap ($, 0 = none)</label><input type="number" id="sv-rakeCap" data-k="rakeCap" min="0" step="0.5"></div>
         </div>
       </div>
-      <div class="panel"${anc("svrange")}>
+      <div class="panel" id="sv-pRange"${anc("svrange")}>
         <h2>Ranges</h2>
         <div class="tabs" role="tablist">
           <button class="tab" role="tab" type="button" id="sv-tab0" aria-selected="true">Out of position</button>
@@ -203,7 +203,7 @@ export function createSolver(root, opt = {}) {
         <div class="field"><label for="sv-rtext">Range text</label><textarea id="sv-rtext" rows="3" spellcheck="false"></textarea></div>
         <p class="note" id="sv-rinfo"></p>
       </div>
-      <div class="panel"${anc("svsizes")}>
+      <div class="panel" id="sv-pSizes"${anc("svsizes")}>
         <h2>Bet sizes</h2>
         <div class="row"><button class="b sm" type="button" data-tree="quick">Quick</button><button class="b sm" type="button" data-tree="standard">Standard</button><button class="b sm" type="button" data-tree="detailed">Detailed</button></div>
         <p class="note">Both players use the same sizes. Bets are a percentage of the pot; raises like “3x” are multiples of the bet. Leave raises empty for no raises. Quick and Standard trees run right in the browser. Bigger trees need the free <a href="${APP_PAGE}" target="_blank" rel="noopener">Hot Seat Solver app</a>.</p>
@@ -222,7 +222,7 @@ export function createSolver(root, opt = {}) {
           </div>
         </details>
       </div>
-      <div class="panel"${anc("svrun")}>
+      <div class="panel" id="sv-pRun"${anc("svrun")}>
         <div class="row"><button class="b primary big" type="button" id="sv-solve">Solve</button><button class="b" type="button" id="sv-stop" hidden>Stop</button></div>
         <div class="prog" id="sv-prog" hidden><div class="bar"><span id="sv-progBar"></span></div><p class="note" id="sv-progTxt"></p></div>
         <div class="err" id="sv-msg" role="status"></div>
@@ -230,7 +230,7 @@ export function createSolver(root, opt = {}) {
       </div>
     </section>
     <section class="main sv-results">
-      <div class="panel"${anc("svres")}>
+      <div class="panel" id="sv-pRes"${anc("svres")}>
         <h2>Results</h2>
         <p class="note" id="sv-resEmpty">Set up a spot and press Solve. The answer shows here: how often each hand should check, bet, call or fold, street by street.</p>
         <div id="sv-resBody" hidden>
@@ -244,7 +244,13 @@ export function createSolver(root, opt = {}) {
       </div>
     </section>
   </div>`;
-  const $ = id => root.querySelector("#sv-" + id);
+  // panels may be moved out of root (the page's panel layout), so look elements up once and keep them
+  const ids = new Map(); root.querySelectorAll("[id^='sv-']").forEach(e => ids.set(e.id.slice(3), e));
+  const $ = id => ids.get(id) || root.querySelector("#sv-" + id);
+  const kIn = [...root.querySelectorAll("[data-k]")], szIn = [...root.querySelectorAll("[data-szi]")];
+  const editEls = [...root.querySelectorAll(".sv-setup input,.sv-setup select,.sv-setup textarea,[data-tree],#sv-clearR")];
+  const parts = [$("bar"), ...root.querySelectorAll(".panel")];
+  const ac = new AbortController();
   const msg = t => { $("msg").innerHTML = t || ""; };
 
   /* ---------- shared state ---------- */
@@ -298,19 +304,19 @@ export function createSolver(root, opt = {}) {
   };
 
   /* ---------- setup: fields ---------- */
-  root.querySelectorAll("[data-k]").forEach(el => { el.addEventListener("input", () => editSpotSoon({ [el.dataset.k]: +el.value })); });
-  root.querySelectorAll("[data-szi]").forEach(el => {
+  kIn.forEach(el => { el.addEventListener("input", () => editSpotSoon({ [el.dataset.k]: +el.value })); });
+  szIn.forEach(el => {
     el.addEventListener("input", () => { const s = sv.spot.sizes.slice(); s[+el.dataset.szi] = el.value; editSpotSoon({ sizes: s }); });
   });
   root.querySelectorAll("[data-tree]").forEach(b => { b.onclick = () => editSpot({ sizes: TREES[b.dataset.tree].slice() }); });
   function syncInputs() {
     const f = document.activeElement;
-    root.querySelectorAll("[data-k]").forEach(el => { if (el !== f) el.value = sv.spot[el.dataset.k]; });
-    root.querySelectorAll("[data-szi]").forEach(el => { if (el !== f) el.value = sv.spot.sizes[+el.dataset.szi] || ""; });
+    kIn.forEach(el => { if (el !== f) el.value = sv.spot[el.dataset.k]; });
+    szIn.forEach(el => { if (el !== f) el.value = sv.spot.sizes[+el.dataset.szi] || ""; });
     if ($("who") !== f) $("who").value = sv.spot.names[tab] || "";
     if ($("rtext") !== f) $("rtext").value = sv.spot.ranges[tab] || "";
     $("note").hidden = !sv.spot.note; $("note").textContent = sv.spot.note || "";
-    root.querySelectorAll(".sv-setup input,.sv-setup select,.sv-setup textarea,[data-tree],#sv-clearR").forEach(el => { if (el.id !== "sv-paintW") el.disabled = !canEdit(); });
+    editEls.forEach(el => { if (el.id !== "sv-paintW") el.disabled = !canEdit(); });
   }
 
   /* ---------- setup: range editor ---------- */
@@ -357,11 +363,12 @@ export function createSolver(root, opt = {}) {
   const onMove = e => {
     if (!paint) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
-    const b = el && el.closest && el.closest("#sv-rgrid [data-cell]");
-    if (b && root.contains(b)) applyPaint(+b.dataset.cell);
+    const b = el && el.closest && el.closest("[data-cell]");
+    if (b && $("rgrid").contains(b)) applyPaint(+b.dataset.cell);
   };
   const onUp = () => { if (!paint) return; paint = null; const r = sv.spot.ranges.slice(); r[tab] = formatRange(gridW); editSpot({ ranges: r }); };
-  window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp); window.addEventListener("pointercancel", onUp);
+  const sig = { signal: ac.signal };
+  window.addEventListener("pointermove", onMove, sig); window.addEventListener("pointerup", onUp, sig); window.addEventListener("pointercancel", onUp, sig);
 
   /* ---------- running a solve ---------- */
   function readSpot(s) {
@@ -630,7 +637,7 @@ export function createSolver(root, opt = {}) {
   });
 
   /* ---------- top bar: who solved, sharing, following the table ---------- */
-  root.addEventListener("click", e => {
+  const onCmd = e => {
     const t = e.target.closest("[data-svcmd]"); if (!t) return;
     const c = t.dataset.svcmd;
     if (c === "explore") { explore = true; myPath = curPath().slice(); render(); }
@@ -638,7 +645,8 @@ export function createSolver(root, opt = {}) {
     else if (c === "follow") { if (canEdit()) { patch({ sync: !sv.sync }); autoKey = ""; if (lastP) tableUpdate(lastP); } }
     else if (c === "app") connectApp(false);
     else if (c === "browser") { if (engine && engine.kind === "app") { engine.close(); engine = null; lsSet("hsp-app", "0"); } render(); }
-  });
+  };
+  parts.forEach(p => p.addEventListener("click", onCmd));
   function renderBar() {
     const bits = [];
     if (shared) {
@@ -798,5 +806,10 @@ export function createSolver(root, opt = {}) {
     loadTableSpot(sp, P) { if (!canEdit()) return; const x = spotFromTable(sp, P); patch({ ...defaultShared(), spot: { ...x.spot, ranges: sv.spot.ranges.slice(), sizes: sv.spot.sizes.slice() }, link: x.link, sync: true }); autoKey = P.hand + "|" + (P.spots || []).length; explore = false; myPath = null; selCell = null; },
     loadSpot(spot) { patch({ spot: { ...defaultSpot(), ...spot } }); },
     refresh: render,
+    canEdit,
+    ranges: () => sv.spot.ranges.slice(),
+    names: () => sv.spot.names.slice(),
+    setRange(k, text) { if (!canEdit()) return false; const r = sv.spot.ranges.slice(); r[k] = text; editSpot({ ranges: r }); return true; },
+    destroy() { ac.abort(); if (engine && !engine.closed && engine.kind === "app") { try { engine.close(); } catch (e) {} } },
   };
 }
