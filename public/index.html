@@ -3,70 +3,90 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Hot Seat Poker</title>
-<meta name="description" content="A live poker teaching table: teachers set every card, students take a seat and play.">
-<script>try{var t=localStorage.getItem("hsp-theme");document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){}</script>
+<title>Hot Seat Poker · a live table for teaching poker</title>
+<meta name="description" content="A free live poker table for teaching. The teacher sets every card, students take a seat from any device, and a solver checks the spot you just played.">
+<script>
+// older lobby links pointed here (hotseatpoker.com/#lobby-abc123): send them to the table
+if(/^#lobby-/.test(location.hash)) location.replace("/play/"+location.hash);
+try{var t=localStorage.getItem("hsp-theme");document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){}
+</script>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/style.css">
-<link rel="stylesheet" href="/solver/solver.css">
-<style>body{margin:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}</style>
+<link rel="stylesheet" href="/site.css">
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <h1>Hot Seat Poker</h1>
-    <span class="chip" id="lobbyChip" hidden></span>
-    <span class="chip role" id="roleChip" hidden>Teacher</span>
-    <span class="chip" id="connChip"><span class="dot" id="connDot"></span><span id="connTxt">Starting…</span></span>
-    <span class="chip" id="stakeChip" hidden>$1/$2 NLHE</span>
-    <span class="spacer"></span>
-    <span class="seg" id="viewSwitch" role="group" aria-label="Show" hidden><button type="button" data-view-mode="table" aria-pressed="true">Table</button><button type="button" data-view-mode="both" aria-pressed="false">Side by side</button><button type="button" data-view-mode="solver" aria-pressed="false">Solver</button></span>
-    <button class="b sm" type="button" id="themeBtn">Light mode</button>
-    <button class="b sm" type="button" id="leaveBtn" hidden>Leave lobby</button>
+<div class="site">
+  <nav class="nav" aria-label="Site">
+    <a class="brand" href="/">Hot Seat Poker</a>
+    <a href="/learn/">How it works</a>
+    <a href="/solver/">Solver</a>
+    <a class="b primary" href="/play/">Open the table</a>
+  </nav>
+
+  <header class="hero">
+    <div class="felt-table" role="img" aria-label="A poker table with a teacher and three students; the flop is Q of spades, J of hearts, 2 of hearts">
+      <div class="rail"></div><div class="felt"></div><div class="line"></div>
+      <div class="printed">
+        <h1>Hot Seat Poker</h1>
+        <p>A live poker table for teaching. You set every card; your students take a seat and play.</p>
+      </div>
+      <div class="hero-board" aria-hidden="true">
+        <span class="pc s deal"><span class="r">Q</span><span class="s">♠</span></span>
+        <span class="pc h deal"><span class="r">J</span><span class="s">♥</span></span>
+        <span class="pc h deal"><span class="r">2</span><span class="s">♥</span></span>
+        <span class="pc slot"></span><span class="pc slot"></span>
+      </div>
+      <div class="hplate teach" style="left:50%;top:4%"><b>Chris</b><span>Teacher</span></div>
+      <div class="hplate" style="left:13%;top:62%"><b>Dana</b><span>$198</span></div>
+      <div class="hplate" style="left:50%;top:97%"><b>Luis</b><span>$214 · to act</span></div>
+      <div class="hplate" style="left:87%;top:62%"><b>Priya</b><span>$190</span></div>
+    </div>
+    <div class="hero-cta">
+      <a class="b primary big-btn" href="/play/">Open the table</a>
+      <a class="b big-btn" href="/learn/">Read the guide</a>
+    </div>
   </header>
 
-  <section id="home" class="home">
-    <div class="main">
-      <div class="panel"><h2>Lobbies</h2><div class="lobs" id="dirList"><p class="note">Loading lobbies…</p></div></div>
-      <div class="panel" id="teachForm" hidden><h2>Teach <span id="teachName"></span></h2>
-        <p class="note">Enter the teacher code for this lobby. Students join without one.</p>
-        <div class="row"><input type="password" id="teachCode" placeholder="Teacher code" autocomplete="off" aria-label="Teacher code"><button class="b primary" type="button" id="teachGo">Join as teacher</button><button class="b" type="button" id="teachCancel">Cancel</button></div>
-        <div class="row" style="margin-top:10px" id="delRow"><button class="b sm warn" type="button" id="delAsk">Delete this lobby…</button></div>
+  <main>
+    <section class="what" aria-label="What it does">
+      <div>
+        <h2>Deal the hand you want to teach</h2>
+        <p>The teacher picks every hole card and every board card, or leaves any slot to the deck. Set the stacks and blinds, deal, and act for any seat. Undo a mistake, cancel a hand, or replay the same cards so students can try another line.</p>
       </div>
-      <div class="panel"><h2>Start a lobby</h2>
-        <div class="fields">
-          <div class="field" style="grid-column:1/-1"><label for="newName">Lobby name</label><input type="text" id="newName" maxlength="28" placeholder="Tuesday study group"></div>
-          <div class="field"><label for="newCode">Teacher code</label><input type="text" id="newCode" maxlength="40" autocomplete="off"></div>
-          <div class="field" id="keyField" hidden><label for="newKey">Organizer key</label><input type="password" id="newKey" maxlength="80" autocomplete="off"></div>
-        </div>
-        <p class="note">Give the teacher code only to people who should see every card and run the table with you. You'll need it to come back as a teacher, so write it down.</p>
-        <button class="b primary" type="button" id="createBtn">Create lobby</button>
+      <div>
+        <h2>Students play from their own seat</h2>
+        <p>Students open the site on a phone or laptop, pick your lobby, and tap an open seat. No accounts. Each student sees only their own cards until you press <b>Reveal all cards</b>, which also shows the hands that folded.</p>
       </div>
-    </div>
-    <aside class="main">
-      <div class="panel"><h2>You</h2><div class="field"><label for="homeName">Your name at the table</label><input type="text" id="homeName" maxlength="16" placeholder="Your name"></div></div>
-      <div class="panel"><h2>Practice alone</h2><p class="note">A table that runs on this device only, with no lobby.</p><button class="b" type="button" id="practiceBtn">Open practice table</button></div>
-      <p class="err" id="homeMsg" role="status"></p>
-    </aside>
-  </section>
+      <div>
+        <h2>Teach together</h2>
+        <p>Co-teachers join with the lobby's teacher code. You see each other's pointers on the table, and an outline marks whatever another teacher is editing, so two people don't change the same seat at once.</p>
+      </div>
+      <div>
+        <h2>Solve the spot you just played</h2>
+        <p>Once a hand reaches the flop with two players, load it into the solver beside the table. Everyone sees the same answer and can move through it together. Bets and cards at the table move the solver along with the hand.</p>
+      </div>
+      <div>
+        <h2>Play your room's rules</h2>
+        <p>Set up the table the way your game runs.</p>
+        <div class="rules"><span class="chip r">Straddles</span><span class="chip r">Antes and big blind ante</span><span class="chip r">Bomb pots</span><span class="chip r">Rake with a cap</span><span class="chip r">No flop, no drop</span><span class="chip r">Run it twice</span><span class="chip r">Shot clock</span></div>
+      </div>
+      <div>
+        <h2>Free to use</h2>
+        <p>Nothing to install for the table, and lobbies are free. Solves run on the computers in your lobby, not on a paid server. The code is open source.</p>
+      </div>
+    </section>
 
-  <div id="duo">
-  <div class="grid" id="game" hidden>
-    <div class="main">
-      <div class="table" id="table" data-anc="table" aria-label="Poker table"></div>
-      <div class="panel" id="actPanel" data-anc="act"></div>
-      <div class="panel" id="solvePanel" hidden></div>
-      <div class="panel" data-anc="log"><h2>Hand log</h2><ul class="log" id="log"></ul></div>
-    </div>
-    <aside id="side" data-anc="side"></aside>
-  </div>
-  <section id="solverPane" hidden><div id="solverRoot"></div></section>
-  </div>
+    <section class="closing">
+      <p>Start a lobby, give your students its name, and deal your first hand. Want to try it alone first? The practice table runs on your device with no lobby.</p>
+      <a class="b primary big-btn" href="/play/">Open the table</a>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Solver engine: <a href="https://github.com/b-inary/postflop-solver" target="_blank" rel="noopener">postflop-solver</a> by Wataru Inariba (GNU AGPL v3).
+    Source code: <a href="https://github.com/nyarkocaster/hot-seat-poker" target="_blank" rel="noopener">github.com/nyarkocaster/hot-seat-poker</a>.
+  </footer>
 </div>
-<div class="modal" id="modal" hidden></div>
-<div id="curLayer" aria-hidden="true"></div>
-<script type="module" src="/app.js"></script>
 </body>
 </html>
