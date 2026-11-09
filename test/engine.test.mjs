@@ -19,6 +19,15 @@ function check(T,tag){
     if(new Set(dealt).size!==dealt.length) fail(tag+": duplicate cards "+dealt.join(","));
   }
   E.pubView().seats.forEach((s,i)=>{if(s.cards&&!G.revealAll&&!G.seats[i].shown) fail(tag+": leaked cards seat "+i)});
+  (G.spots||[]).forEach(sp=>{
+    const n={flop:3,turn:4,river:5}[sp.st];
+    if(!n||sp.board.length!==n) fail(tag+": spot board "+sp.st+" "+sp.board);
+    if(sp.pl.length<2||!(sp.pot>0)) fail(tag+": spot players/pot");
+    if(sp.pl.some(p=>!p.pos)||new Set(sp.pl.map(p=>p.pos)).size!==sp.pl.length) fail(tag+": spot positions "+sp.pl.map(p=>p.pos));
+    if(sp.pl.filter(p=>p.agg).length>1) fail(tag+": two aggressors");
+    if(sp.pl.some(p=>p.stack<0)) fail(tag+": spot stack");
+  });
+  if(G.phase==="done"&&tag==="hand end") st.spots=(st.spots||0)+(G.spots||[]).length;
 }
 const ev=c=>evaluate(c.split(" "));
 [["As Ks Qs Js Ts 2d 3c",8],["Ah 2h 3h 4h 5h Kd Kc",8],["9c 9d 9h 9s 2c 3d 4h",7],["Kc Kd Kh 2s 2c 7d 8h",6],["2h 7h 9h Jh Kh As Ad",5],["Ah 2c 3d 4s 5h Kd Qc",4],["7c 7d 7h Ks 2c 3d 9h",3],["7c 7d Kh Ks 2c 3d 9h",2],["7c 7d Kh Qs 2c 3d 9h",1],["Ac Jd 9h 7s 4c 3d 2h",0]]
