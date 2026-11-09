@@ -30,7 +30,7 @@ export default {
         return json({id});
       }
       let m=/^\/api\/lobbies\/([a-z0-9]{3,12})\/delete$/.exec(p);
-      if(m&&req.method==="POST"){let b={};try{b=await req.json()}catch(e){} const r=await lobbyStub(env,m[1]).destroy(normCode(b.code));return json(r,r.ok?200:403)}
+      if(m&&req.method==="POST"){let b={};try{b=await req.json()}catch(e){} const r=await lobbyStub(env,m[1]).destroy(m[1],normCode(b.code));return json(r,r.ok?200:403)}
       m=/^\/ws\/([a-z0-9]{3,12})$/.exec(p);
       if(m){
         if(req.headers.get("Upgrade")!=="websocket") return new Response("Expected a WebSocket",{status:426});
@@ -44,8 +44,9 @@ export default {
 export class Directory extends DurableObject{
   async list(){const m=await this.ctx.storage.list({prefix:"l:"});return [...m.values()].sort((a,b)=>(b.live-a.live)||(b.created-a.created))}
   async count(){return (await this.ctx.storage.list({prefix:"l:"})).size}
-  async put(s){await this.ctx.storage.put("l:"+s.id,s)}
-  async remove(id){await this.ctx.storage.delete("l:"+id)}
+  // A deleted lobby gets a permanent marker so a late status update can never bring it back.
+  async put(s){if(await this.ctx.storage.get("d:"+s.id)) return; await this.ctx.storage.put("l:"+s.id,s)}
+  async remove(id){await this.ctx.storage.put("d:"+id,1); await this.ctx.storage.delete("l:"+id)}
 }
 
 export class Lobby extends DurableObject{
@@ -65,13 +66,16 @@ export class Lobby extends DurableObject{
     await this.ctx.storage.put({meta:this.meta,g:this.E.G,hist:[],toks:{}});
     await this.dirUpdate(true);
   }
-  async destroy(code){
-    if(!this.meta) return {ok:true};
+  async destroy(id,code){
+    // Already gone (or never existed): just make sure no leftover list entry remains.
+    if(!this.meta){await dirStub(this.env).remove(id);return {ok:true}}
     if(!(await this.checkCode(code))) return {ok:false,error:"That teacher code doesn't match this lobby."};
-    const id=this.meta.id;
+    id=this.meta.id;
+    // Clear this lobby first, so nothing it does while people disconnect can re-list it.
+    this.meta=null; this.E.G=null; this.E.history.length=0; this.toks={}; this.lastDir=""; this.curs.clear();
+    await dirStub(this.env).remove(id);
+    await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll();
     for(const ws of this.ctx.getWebSockets()){try{ws.send(JSON.stringify({t:"deleted"}));ws.close(4004,"Lobby deleted")}catch(e){}}
-    await this.ctx.storage.deleteAll(); await dirStub(this.env).remove(id);
-    this.meta=null; this.E.G=null; this.E.history.length=0; this.toks={};
     return {ok:true};
   }
   async checkCode(code){
@@ -97,8 +101,9 @@ export class Lobby extends DurableObject{
     const seat=E.G.seats.findIndex((s,i)=>i<E.G.size&&s.uid===a.cid);
     return {t:"state",now:Date.now(),pub,mine:seat>=0?{hand:E.G.hand,seat,cards:E.G.seats[seat].cards}:null};
   }
-  broadcastState(){const pub=this.E.pubView();for(const {ws,a} of this.sockets()) this.send(ws,this.stateFor(a,pub))}
+  broadcastState(){if(!this.E.G) return;const pub=this.E.pubView();for(const {ws,a} of this.sockets()) this.send(ws,this.stateFor(a,pub))}
   broadcastPeers(){
+    if(!this.E.G) return;
     const list=this.sockets().map(({a})=>({peer:a.peer,name:a.name,role:a.role,seat:a.role==="student"?this.E.G.seats.findIndex((s,i)=>i<this.E.G.size&&s.uid===a.cid):-1}));
     for(const {ws} of this.sockets()) this.send(ws,{t:"peers",list});
   }
