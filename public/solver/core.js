@@ -754,11 +754,11 @@ export function createSolver(root, opt = {}) {
     }
     return path;
   }
-  let lastP = null, autoKey = "";
+  let lastP = null, autoKey = "", gotFull = !shared; // in a lobby, wait for the lobby's saved solver before copying the table in
   // While following the table, a teacher's screen copies each new street (board, pot, stacks,
   // positions) into the setup, unless a solve is running or ready. Ranges stay as they are.
   function autoLoad(P) {
-    if (!TB || !TB.canPush() || !sv.sync || !P) return;
+    if (!TB || !TB.canPush() || !sv.sync || !P || !gotFull) return;
     const spots = P.spots || [], sp = spots[spots.length - 1];
     if (!sp) return;
     const key = P.hand + "|" + spots.length;
@@ -807,7 +807,7 @@ export function createSolver(root, opt = {}) {
   /* ---------- lobby messages ---------- */
   function onMessage(m) {
     if (m.t === "sv") {
-      if (m.full) { const f = m.full; if (f.solveId !== sv.solveId) { cache.clear(); node = null; nodeKey = ""; } sv = { ...defaultShared(), ...f, spot: normalizeSpot(f.spot) }; tablePath = null; tableKey = ""; if (lastP) tableUpdate(lastP); render(); }
+      if ("full" in m) { const f = m.full || {}; if (f.solveId !== sv.solveId) { cache.clear(); node = null; nodeKey = ""; } sv = { ...defaultShared(), ...f, spot: normalizeSpot(f.spot) }; tablePath = null; tableKey = ""; gotFull = true; autoKey = ""; if (lastP) tableUpdate(lastP); render(); }
       else if (m.p) { if (m.p.spot) m.p.spot = normalizeSpot(m.p.spot); patch(m.p, true); if (lastP) tableUpdate(lastP); }
       else if (m.sp) { applySpotPatch(sv.spot, m.sp); render(); }
       return;
