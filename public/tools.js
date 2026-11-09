@@ -231,7 +231,7 @@ export function createStove(el, opt = {}) {
   }
   function parsed() {
     const b = parseCards(board), d = parseCards(dead);
-    const ps = rows.map(r => parseHolding(r.text));
+    const ps = rows.map(r => r.combos ? { kind: "range", combos: r.combos, err: r.combos.length ? "" : "No hands reach this spot" } : parseHolding(r.text));
     let err = b.err || d.err;
     if (!err && ![0, 3, 4, 5].includes(b.cards.length)) err = "The board needs 0, 3, 4 or 5 cards.";
     if (!err) { const seen = new Set(); for (const c of [...b.cards, ...d.cards]) { if (seen.has(c)) { err = `${cardStr(c)} is used twice`; break; } seen.add(c); }
@@ -244,7 +244,7 @@ export function createStove(el, opt = {}) {
     const { b, d, ps, err } = parsed();
     res = null;
     if (err || ps.some(p => p.err)) { busy = false; draw(); return; }
-    if (rows.every(r => !r.text.trim())) { busy = false; draw(); return; }
+    if (rows.every(r => !r.text.trim() && !r.combos)) { busy = false; draw(); return; }
     const w = startWorker(); if (!w) { q(".sstat").textContent = "This browser can't run the stove."; return; }
     jobId++; busy = true;
     w.postMessage({ id: jobId, job: { players: ps.map(p => p.combos), board: b.cards, dead: d.cards } });
@@ -255,8 +255,8 @@ export function createStove(el, opt = {}) {
     const box = q(".srows");
     if (box.children.length !== rows.length || !box.contains(f)) {
       box.innerHTML = rows.map((r, i) => `<div class="stvrow${i === sel ? " on" : ""}" data-i="${i}">
-        <div class="sname"><span class="sdot c${i}"></span>${r.label ? esc(r.label) : `Player ${i + 1}`}</div>
-        <input type="text" data-hand="${i}" value="${esc(r.text)}" placeholder="${i ? "Blank = any two cards" : "Hand like AhKh, or a range like QQ+,AKs"}" spellcheck="false" autocomplete="off" aria-label="Player ${i + 1} hand or range">
+        <div class="sname"><span class="sdot c${i}"></span>${r.label ? esc(r.label) : `Player ${i + 1}`}${r.note ? `<span class="muted snote">${esc(r.note)}</span>` : ""}</div>
+        <input type="text" data-hand="${i}" value="${esc(r.text)}" placeholder="${r.combos ? "Solver range at this spot (type to replace it)" : i ? "Blank = any two cards" : "Hand like AhKh, or a range like QQ+,AKs"}" spellcheck="false" autocomplete="off" aria-label="Player ${i + 1} hand or range">
         <select data-preset="${i}" aria-label="Load a range for player ${i + 1}"><option value="">Range…</option>${Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join("")}</select>
         ${rows.length > 2 ? `<button type="button" class="b sm sx" data-rm="${i}" aria-label="Remove player ${i + 1}">×</button>` : ""}
         <div class="sres" data-res="${i}"></div>
@@ -272,27 +272,27 @@ export function createStove(el, opt = {}) {
       const p = ps[i];
       if (p.err) { cell.innerHTML = `<span class="err">${esc(p.err)}</span>`; return; }
       const x = res && res.players && res.players[i];
-      const kind = p.kind === "hand" ? p.combos[0].slice(0, 2).map(chip).join("") : p.kind === "any" ? `<span class="muted">Any two cards</span>` : `<span class="muted">${p.combos.length} combos</span>`;
+      const kind = rows[i].combos ? `<span class="muted">${p.combos.length} combos, weighted</span>` : p.kind === "hand" ? p.combos[0].slice(0, 2).map(chip).join("") : p.kind === "any" ? `<span class="muted">Any two cards</span>` : `<span class="muted">${p.combos.length} combos</span>`;
       cell.innerHTML = x ? `<div class="sbar"><i class="c${i}" style="width:${(x.eq * 100).toFixed(1)}%"></i></div>
         <div class="snums"><b>${pc(x.eq)}</b><span>win ${pc(x.win)} · tie ${pc(x.tie)}</span>${kind}${opt.odds && opt.odds() ? `<button type="button" class="linkbtn" data-use="${i}">Use in the odds calculator</button>` : ""}</div>` : `<div class="snums">${kind}</div>`;
     });
     const st = q(".sstat");
     if (err) st.innerHTML = `<span class="err">${esc(err)}</span>`;
     else if (res && res.err) st.innerHTML = `<span class="err">${esc(res.err)}</span>`;
-    else if (!res) st.textContent = busy ? "Working…" : rows.every(r => !r.text.trim()) ? "Enter a hand or range for at least one player." : "";
+    else if (!res) st.textContent = busy ? "Working…" : rows.every(r => !r.text.trim() && !r.combos) ? "Enter a hand or range for at least one player." : "";
     else st.textContent = res.exact ? (busy ? "Checking every possible board…" : `Exact: every possible board checked.`) : `${busy ? "Estimating" : "Estimate"} from ${Math.round(res.trials).toLocaleString("en-US")} deals (about ±${pc(Math.max(...res.players.map(p => p.margin)), 1)}).`;
     const x = res && res.players && res.players[sel];
     q(".scats").innerHTML = x ? `<h3>${esc(rows[sel].label || `Player ${sel + 1}`)} ends up with</h3>${x.cats.map((v, k) => [v, k]).filter(([v]) => v > 0.0005).reverse().map(([v, k]) => `<div class="scat"><span>${CATS[k]}</span><div class="sbar"><i class="c${sel}" style="width:${Math.min(100, v * 100).toFixed(1)}%"></i></div><b>${pc(v)}</b></div>`).join("")}<p class="why">Click a player to see their hands. Chances are for the final five cards.</p>` : "";
   }
   el.addEventListener("input", e => {
     const t = e.target;
-    if (t.dataset.hand != null) { rows[+t.dataset.hand].text = t.value; rows[+t.dataset.hand].label = rows[+t.dataset.hand].label; runSoon(); }
+    if (t.dataset.hand != null) { const r = rows[+t.dataset.hand]; r.text = t.value; if (r.combos) { r.combos = null; r.note = ""; } runSoon(); }
     else if (t.dataset.s === "board") { board = t.value; runSoon(); }
     else if (t.dataset.s === "dead") { dead = t.value; runSoon(); }
   });
   el.addEventListener("change", e => {
     const t = e.target; if (t.dataset.preset == null || !t.value) return;
-    const i = +t.dataset.preset; rows[i].text = PRESETS[t.value] || ""; t.value = ""; q(`[data-hand="${i}"]`).value = rows[i].text; run();
+    const i = +t.dataset.preset; rows[i].combos = null; rows[i].note = ""; rows[i].text = PRESETS[t.value] || ""; t.value = ""; q(`[data-hand="${i}"]`).value = rows[i].text; run();
   });
   el.addEventListener("click", e => {
     const b = e.target.closest("button"), row = e.target.closest(".stvrow");
@@ -326,11 +326,19 @@ export function createStove(el, opt = {}) {
     setAll(rowsNew, (P.board || []).join(" "), deadC.join(" "));
     if (live.length > 6 && opt.flash) opt.flash("The stove takes up to six players");
   }
+  // After a solve: both ranges as they stand at the spot on screen in the solver, each hand weighted by
+  // how often it gets there. Before a solve: the starting ranges typed into the solver, on its board.
   function fromSolver() {
-    const S = opt.solver && opt.solver(); if (!S) return;
+    const S = opt.solver && opt.solver();
+    if (!S) { if (opt.flash) opt.flash("The solver isn't open to you right now"); return; }
+    const nr = S.nodeRanges && S.nodeRanges();
+    if (nr) {
+      setAll([0, 1].map(k => ({ text: "", combos: nr.combos[k], label: `${nr.names[k]} (${k ? "IP" : "OOP"})`, note: ` · after ${nr.at}` })), nr.board.map(cardStr).join(" "));
+      return;
+    }
     const r = S.ranges(), nm = S.names(), sp = S.state && S.state.spot;
     if (!r[0].trim() && !r[1].trim()) { if (opt.flash) opt.flash("The solver's ranges are blank"); return; }
-    setAll([{ text: r[0], label: `${nm[0]} (OOP)` }, { text: r[1], label: `${nm[1]} (IP)` }], sp && sp.board ? sp.board.map(cardStr).join(" ") : "");
+    setAll([{ text: r[0], label: `${nm[0]} (OOP)`, note: " · starting range" }, { text: r[1], label: `${nm[1]} (IP)`, note: " · starting range" }], sp && sp.board ? sp.board.map(cardStr).join(" ") : "");
   }
   draw();
   return { refresh: draw, run, fromTable, get rows() { return rows; }, get result() { return res; }, destroy() { if (worker) worker.terminate(); worker = null; } };
