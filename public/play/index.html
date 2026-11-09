@@ -23,6 +23,7 @@
     <span class="chip" id="stakeChip" hidden>$1/$2 NLHE</span>
     <span class="spacer"></span>
     <span class="seg" id="viewSwitch" role="group" aria-label="Show" hidden><button type="button" data-view-mode="table" aria-pressed="true">Table</button><button type="button" data-view-mode="both" aria-pressed="false">Side by side</button><button type="button" data-view-mode="solver" aria-pressed="false">Solver</button></span>
+    <button class="b sm" type="button" id="dockReset" hidden title="Put every panel back in its starting place">Reset layout</button>
     <a class="b sm" href="/learn/" target="_blank" rel="noopener">How it works</a>
     <button class="b sm" type="button" id="themeBtn">Light mode</button>
     <button class="b sm" type="button" id="leaveBtn" hidden>Leave lobby</button>
@@ -59,11 +60,11 @@
       <div class="table" id="table" data-anc="table" aria-label="Poker table"></div>
       <div class="panel" id="actPanel" data-anc="act"></div>
       <div class="panel" id="solvePanel" hidden></div>
-      <div class="panel" data-anc="log"><h2>Hand log</h2><ul class="log" id="log"></ul></div>
+      <div class="panel" id="logPanel" data-anc="log"><h2>Hand log</h2><ul class="log" id="log"></ul></div>
     </div>
     <aside id="side" data-anc="side"></aside>
   </div>
-  <section id="solverPane" hidden><div id="solverRoot"></div></section>
+  <section id="solverPane" hidden><div id="solverRoot"></div><div class="panel nb" id="notesPanel" data-anc="svnotes"></div></section>
   </div>
 </div>
 <div class="modal" id="modal" hidden></div>
