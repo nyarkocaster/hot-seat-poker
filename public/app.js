@@ -1,6 +1,8 @@
 // Hot Seat Poker page: lobby list, table, teacher controls, live connection to the lobby server.
 import {createEngine,freshGame,RANKS,SYM,STREETS,money,pretty} from "./engine.js";
 import {createSolver} from "./solver/core.js";
+import {createDock} from "./dock.js";
+import {createNotes} from "./notes.js";
 
 const $=s=>document.querySelector(s);
 const esc=t=>String(t==null?"":t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -56,14 +58,23 @@ function onMsg(m){
     if(m.t==="sv"&&m.on){svOn=true;render()}
     if(SV) SV.onMessage(m);
   }
+  else if(m.t==="nb"){if(NB) NB.onMessage(m)}
 }
 
 /* ---------- the solver, in this window ---------- */
-let SV=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
+let SV=null, NB=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
+const DOCK=createDock($("#duo"));
+function unmountSolver(){
+  DOCK.release();
+  if(SV) SV.destroy(); if(NB) NB.destroy(); SV=null; NB=null;
+  $("#solverRoot").innerHTML=""; $("#notesPanel").innerHTML="";
+}
 function mountSolver(){
-  const root=$("#solverRoot"); root.innerHTML=""; root.className="";
+  unmountSolver();
+  const root=$("#solverRoot"); root.className="";
   const transport=mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},peer:()=>myPeer,name:()=>myName||"Someone",canEdit:()=>isT()||svOn}:null;
   SV=createSolver(root,{transport,anchors:mode==="lobby",table:{current:()=>view(),canPush:()=>isT(),push:(k,card)=>{if(E.G&&E.used().has(card)){flash(`${pretty(card)} is in a player's hand, so the table can't deal it`);return false}sendOp({t:"pick",kind:"board",k,card});flash(`${k===3?"Turn":"River"} set to ${pretty(card)} on the table`);return true}}});
+  NB=createNotes($("#notesPanel"),{transport:mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},canEdit:()=>isT()||svOn}:null,table:{current:()=>view()},solver:()=>SV,flash});
   svOn=mode==="local";
 }
 const solverAllowed=()=>!!mode&&(isT()||svOn);
@@ -74,6 +85,8 @@ function applyView(){
   $("#solverPane").hidden=!mode||v==="table";
   const sw=$("#viewSwitch"); sw.hidden=!ok;
   sw.querySelectorAll("[data-view-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.viewMode===v)));
+  DOCK.set(mode&&v!=="table"?v:null);
+  $("#dockReset").hidden=!DOCK.view;
 }
 
 function enterLobby(id,role,code){
@@ -92,7 +105,7 @@ function leaveLobby(quiet){
   wantWs=false; clearTimeout(retryT); clearInterval(pingT); clearTimeout(localClockT);
   if(ws){try{ws.close()}catch(e){}} ws=null; wsOpen=false;
   mode=null; ROLE=null; L=null; TCODE=""; PUB=null; MINE=null; HIST=0; peers=[]; myPeer=null; curs.clear(); welcomed=false;
-  E.G=null; E.history.length=0; picker=null; sideTab="seats"; confirmReset=false; myBusy="[]"; SV=null; svOn=false; $("#solverRoot").innerHTML="";
+  E.G=null; E.history.length=0; picker=null; sideTab="seats"; confirmReset=false; myBusy="[]"; unmountSolver(); svOn=false;
   if(!quiet){setHash("");loadLobbies();updateConn();render()}
 }
 function enterLocal(){
@@ -181,7 +194,7 @@ function renderNow(){
   }
   $("#stakeChip").hidden=false; $("#stakeChip").textContent=`${money(P.blinds.sb)}/${money(P.blinds.bb)} NLHE · ${P.size}-max`;
   mySeat=T?-1:P.seats.findIndex(s=>s.uid===ME.cid);
-  renderTable(P,T); renderAct(P,T); renderSolve(P,T); applyView(); if(SV) SV.tableUpdate(P);
+  renderTable(P,T); renderAct(P,T); renderSolve(P,T); applyView(); if(SV) SV.tableUpdate(P); if(NB) NB.tableUpdate(P);
   setHTML($("#log"),P.log.slice().reverse().map(t=>`<li>${esc(t)}</li>`).join("")||`<li class="muted">No hands yet.</li>`);
   if(T) renderTeacherSide(); else setSide(studentSide(P));
   if(picker&&!T) picker=null;
@@ -308,7 +321,7 @@ function renderSolve(P,T){
   const btns=spots.map((sp,i)=>sp.pl.length===2
     ?`<button class="b sm" type="button" data-svload="${i}">Open the ${NAME[sp.st]} in the solver <span class="muted">· ${esc(sp.pl[0].pos)} vs ${esc(sp.pl[1].pos)}</span></button>`
     :`<span class="chip">${NAME[sp.st]}: ${sp.pl.length} players, the solver needs exactly two</span>`).join("");
-  setHTML(el,`<h2>Solver</h2><div class="row">${btns}</div><p class="note">Loads this hand's board, pot and stacks into the solver${mode==="lobby"?", shared with everyone here who can see it":""}. Ranges start as a guess from the preflop action. While it follows the table, cards and bets dealt here move the solver along with the hand.</p>`);
+  setHTML(el,`<h2>Solver</h2><div class="row">${btns}</div><p class="note">Loads this hand's board, pot and stacks into the solver${mode==="lobby"?", shared with everyone here who can see it":""}. Ranges start blank, so set them in the solver. While it follows the table, cards and bets dealt here move the solver along with the hand.</p>`);
 }
 /* shot clock countdown, updated in place without redrawing the page */
 function tick(){
@@ -510,6 +523,7 @@ document.addEventListener("click",e=>{
     else if(t.dataset.pk==="done"){closePicker()}
     return;
   }
+  if(t.id==="dockReset"){DOCK.reset();render();return}
   if(t.id==="themeBtn"){const nt=document.documentElement.dataset.theme==="light"?"dark":"light";document.documentElement.dataset.theme=nt;try{localStorage.setItem("hsp-theme",nt)}catch(x){}render();return}
   if(t.id==="leaveBtn"){leaveLobby();return}
   if(!mode){
