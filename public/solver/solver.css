@@ -1,0 +1,57 @@
+/* Solver page: setup on the left, results on the right (stacked on phones). Uses the table's colours. */
+body{margin:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+.home-link{color:inherit;text-decoration:none}
+.sgrid{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:980px){.sgrid{grid-template-columns:minmax(0,1fr)}}
+textarea{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:inherit;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 9px;width:100%;resize:vertical}
+input[type=text]{width:100%}
+.boardrow{display:flex;gap:6px;min-height:52px;align-items:center;margin-bottom:8px}
+.boardrow .pc{width:38px;height:52px}
+.boardrow .pc .r{font-size:20px}.boardrow .pc .s{font-size:16px}
+.boardrow .pc.slot{border-color:var(--line);color:var(--muted)}
+.sdeck .pc.cur{outline:3px solid var(--brass);outline-offset:-1px}
+.sdeck{margin-bottom:12px}
+
+/* 13x13 hand grid */
+.rgrid{display:grid;grid-template-columns:repeat(13,minmax(0,1fr));gap:2px;user-select:none;-webkit-user-select:none;touch-action:none;margin:8px 0}
+.rgrid.res{touch-action:auto}
+.rc{position:relative;aspect-ratio:1;border:0;border-radius:3px;padding:0;background:var(--bg);overflow:hidden;cursor:pointer;color:var(--ink);font:600 clamp(8px,1.6vw,12px)/1 var(--f-body)}
+.rgrid.res .rc{font-size:clamp(8px,1.1vw,12px)}
+@media (max-width:980px){.rgrid.res .rc{font-size:clamp(8px,2.3vw,12px)}}
+.rc .fill{position:absolute;left:0;right:0;bottom:0;background:var(--brass);opacity:.85}
+.rc .bars{position:absolute;left:0;right:0;bottom:0;display:flex}
+.rc .bars i{display:block;height:100%}
+.rc span{position:relative;z-index:1;text-shadow:0 0 3px var(--bg),0 0 2px var(--bg)}
+.rc.sel{outline:2px solid var(--ink);outline-offset:-2px}
+.rc.empty{opacity:.45}
+.paint{margin:4px 0 10px}
+.paint input[type=range]{flex:1;max-width:220px}
+
+.sizes{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px 8px;align-items:center;margin:8px 0}
+.adv{margin-top:8px}
+.adv summary{cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:8px}
+.prog{margin-top:10px}
+.bar{height:8px;border-radius:4px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
+.bar span{display:block;height:100%;width:0;background:var(--ok);transition:width .2s}
+
+.path{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:8px}
+.path button{font-size:12px}
+.nodehead{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-bottom:8px}
+.nodehead b{font-family:var(--f-display);font-size:18px;letter-spacing:.03em}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.acts .b{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:92px;border-left:6px solid var(--line)}
+.acts .b small{color:var(--muted);font-size:12px}
+.acts .deck{width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted);margin:6px 0}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.detail table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+.detail th,.detail td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right}
+.detail th:first-child,.detail td:first-child{text-align:left}
+.detail .cards{font-weight:600;white-space:nowrap}
+.cards .h{color:var(--s-h)} .cards .d{color:var(--s-d)} .cards .c{color:var(--s-c)}
+:root[data-theme="dark"] .cards .s{color:#e4ece6}
+.sfoot{margin-top:24px}
+.sfoot a{color:inherit}
+.summary{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin-bottom:8px}
+.summary b{color:var(--ink);font-weight:600}
