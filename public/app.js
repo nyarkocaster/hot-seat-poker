@@ -318,9 +318,7 @@ function renderSolve(P,T){
   if(!allowed||!spots.length){el.hidden=true;setHTML(el,"");return}
   el.hidden=false;
   const NAME={flop:"flop",turn:"turn",river:"river"};
-  const btns=spots.map((sp,i)=>sp.pl.length===2
-    ?`<button class="b sm" type="button" data-svload="${i}">Open the ${NAME[sp.st]} in the solver <span class="muted">· ${esc(sp.pl[0].pos)} vs ${esc(sp.pl[1].pos)}</span></button>`
-    :`<span class="chip">${NAME[sp.st]}: ${sp.pl.length} players, the solver needs exactly two</span>`).join("");
+  const btns=spots.map((sp,i)=>`<button class="b sm" type="button" data-svload="${i}">Open the ${NAME[sp.st]} in the solver <span class="muted">· ${sp.pl.length===2?`${esc(sp.pl[0].pos)} vs ${esc(sp.pl[1].pos)}`:`${sp.pl.length} players, study two at a time`}</span></button>`).join("");
   setHTML(el,`<h2>Solver</h2><div class="row">${btns}</div><p class="note">Loads this hand's board, pot and stacks into the solver${mode==="lobby"?", shared with everyone here who can see it":""}. Ranges start blank, so set them in the solver. While it follows the table, cards and bets dealt here move the solver along with the hand.</p>`);
 }
 /* shot clock countdown, updated in place without redrawing the page */
