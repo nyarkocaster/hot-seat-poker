@@ -85,7 +85,9 @@ jobs:
           path: solver-app/hot-seat-solver-${{ matrix.name }}.zip
 
   release:
+    # publish whatever built, so a slow Mac queue doesn't hold up Windows and Linux
     needs: build
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
