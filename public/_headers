@@ -1,0 +1,7 @@
+# The solver page needs cross-origin isolation so it can use several CPU threads.
+/solver
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+/solver/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
