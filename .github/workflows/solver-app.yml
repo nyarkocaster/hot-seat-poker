@@ -1,4 +1,4 @@
-# Builds the Hot Seat Solver app (solver-app/) for Windows, Mac and Linux and publishes the zips
+# Builds the Hot Seat Solver app (solver-app/) for Windows and Linux (Mac later) and publishes the zips
 # on the "solver-app" release, which the download page links to.
 name: Build solver app
 
@@ -23,8 +23,6 @@ jobs:
         include:
           - os: windows-latest
             name: windows
-          - os: macos-latest
-            name: mac
           - os: ubuntu-latest
             name: linux
     runs-on: ${{ matrix.os }}
@@ -85,7 +83,7 @@ jobs:
           path: solver-app/hot-seat-solver-${{ matrix.name }}.zip
 
   release:
-    # publish whatever built, so a slow Mac queue doesn't hold up Windows and Linux
+    # publish whatever built, even if one platform fails
     needs: build
     if: always()
     runs-on: ubuntu-latest
