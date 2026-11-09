@@ -1,0 +1,105 @@
+# Builds the Hot Seat Solver app (solver-app/) for Windows, Mac and Linux and publishes the zips
+# on the "solver-app" release, which the download page links to.
+name: Build solver app
+
+on:
+  push:
+    branches: [main]
+    paths: ["solver-app/**", "solver/src/**", "solver/Cargo.toml", ".github/workflows/solver-app.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-solver-app
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: mac
+          - os: ubuntu-latest
+            name: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        shell: bash
+        working-directory: solver-app
+        run: |
+          rustup update stable --no-self-update && rustup default stable
+          mkdir -p out
+          if [ "${{ matrix.name }}" = "mac" ]; then
+            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+            cargo build --release --target aarch64-apple-darwin
+            cargo build --release --target x86_64-apple-darwin
+            lipo -create -output out/hot-seat-solver target/aarch64-apple-darwin/release/hot-seat-solver target/x86_64-apple-darwin/release/hot-seat-solver
+          elif [ "${{ matrix.name }}" = "windows" ]; then
+            RUSTFLAGS="-C target-feature=+crt-static" cargo build --release
+            cp target/release/hot-seat-solver.exe out/
+          else
+            cargo build --release
+            cp target/release/hot-seat-solver out/
+          fi
+
+      - name: Package
+        shell: bash
+        working-directory: solver-app
+        run: |
+          cp ../LICENSE out/LICENSE.txt
+          cat > out/README.txt <<'TXT'
+          Hot Seat Solver
+          ===============
+          Runs big postflop solves for hotseatpoker.com on this computer.
+
+          1. Open hot-seat-solver (on Windows: hot-seat-solver.exe). Leave its window open.
+          2. On the solver at hotseatpoker.com, click "Connect the solver app".
+             If your browser asks to access devices on your network, choose Allow.
+
+          Windows: if you see "Windows protected your PC", click More info, then Run anyway.
+          Mac: if it's blocked, open System Settings > Privacy & Security and click Open Anyway.
+
+          Instructions: https://hotseatpoker.com/solver/app.html
+          Source code (GNU AGPL v3): https://github.com/nyarkocaster/hot-seat-poker
+          Solver engine: postflop-solver by Wataru Inariba.
+          TXT
+          cd out
+          if [ "${{ matrix.name }}" = "windows" ]; then
+            7z a ../hot-seat-solver-windows.zip .
+          else
+            chmod +x hot-seat-solver
+            zip -r ../hot-seat-solver-${{ matrix.name }}.zip .
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.name }}
+          path: solver-app/hot-seat-solver-${{ matrix.name }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish on the solver-app release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          ls -la dist
+          if ! gh release view solver-app -R "$REPO" >/dev/null 2>&1; then
+            gh release create solver-app -R "$REPO" --target "$GITHUB_SHA" --title "Hot Seat Solver app" --latest=false \
+              --notes "Downloads for the Hot Seat Solver app. Instructions: https://hotseatpoker.com/solver/app.html"
+          fi
+          gh release upload solver-app dist/*.zip -R "$REPO" --clobber
