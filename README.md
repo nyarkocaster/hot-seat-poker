@@ -41,9 +41,11 @@ Cloudflare → your `hot-seat-poker` Worker → **Settings** → **Variables and
 Cloudflare → your Worker → **Settings** → **Domains & Routes** → **Add** → **Custom domain**. This needs a domain you've added to Cloudflare.
 
 ## Using it
+The home page (`/`) introduces the site, `/learn/` is the step-by-step guide, and the table itself is at `/play/`. Old lobby links (`/#lobby-...`) forward to `/play/`.
+
 - **Start a lobby:** enter your name, a lobby name and a teacher code, then click **Create lobby**. Write the code down; you need it to teach in that lobby again. This browser remembers it too.
-- **Co-teachers:** they open the site, click **Teach** on the lobby, and enter the teacher code.
-- **Students:** they open the site (or the lobby link from the People tab), type a name, click **Join as student**, and tap an open seat. Each student's browser remembers them, so a reload keeps their seat.
+- **Co-teachers:** they open the table page (`/play/`), click **Teach** on the lobby, and enter the teacher code.
+- **Students:** they open the table page (`/play/`, or the lobby link from the People tab), type a name, click **Join as student**, and tap an open seat. Each student's browser remembers them, so a reload keeps their seat.
 - **Game options:** Table setup tab. "Straddle next hand" and "Bomb pot next hand" are in the action bar between hands.
 - **Solver:** use the **Table / Side by side / Solver** switch at the top of a lobby. Once a hand reaches the flop with two players, the **Solver** panel under the action bar loads that street (board, pot, stacks, positions) into the solver, with ranges guessed from the preflop action. The solver is shared with the lobby: teachers and students edit the setup together, see each other's pointers, and move through the solved tree together (anyone can switch to **Explore on my own** and rejoin later). Only the computer that pressed **Solve** does the work; everyone else gets the results through the lobby. While **Follow the table** is on, cards and bets at the table move the solver along, and a teacher picking the next card in the solver sets it as the table's next card. Teachers choose when students may use it (Table setup → Teaching). The standalone page `/solver/` works too.
 - **Big trees:** Quick and Standard trees run in the browser with nothing to install. Trees that need more than about 4 GB of memory run in the free **Hot Seat Solver app** (`/solver/app.html`), which runs on your computer and connects to the page.
@@ -54,10 +56,11 @@ Cloudflare's free plan allows about 100,000 server requests a day. Messages are 
 
 ## For developers
 - `public/engine.js`: game engine (pure JS, shared by server and browser)
-- `public/app.js`, `public/index.html`, `public/style.css`: the page
+- `public/app.js`, `public/play/index.html`, `public/style.css`: the table page
+- `public/index.html`, `public/learn/index.html`, `public/site.css`: the landing page and guide
 - `src/worker.js`: Cloudflare Worker with two Durable Objects. `Lobby` runs one table, talks WebSockets and keeps state in SQLite storage. `Directory` keeps the lobby list.
 - `public/solver/core.js`: the solver component (shared state, engines, table sync), used by the table page and `public/solver/` (standalone page). `src/worker.js` relays shared-solver changes and node requests between lobby members.
-- `solver-app/`: the Hot Seat Solver app, a small Rust program that runs the same solver natively and listens on `ws://127.0.0.1:47123` (only Hot Seat Poker pages may connect). `.github/workflows/solver-app.yml` builds it for Windows, Mac and Linux and publishes the zips on the `solver-app` release.
+- `solver-app/`: the Hot Seat Solver app, a small Rust program that runs the same solver natively and listens on `ws://127.0.0.1:47123` (only Hot Seat Poker pages may connect). `.github/workflows/solver-app.yml` builds it for Windows and Linux and publishes the zips on the `solver-app` release.
 - `public/solver/`: the solver page. `solver/` holds the Rust wrapper around [postflop-solver](https://github.com/b-inary/postflop-solver) (Wataru Inariba, AGPL-3.0). The GitHub Action in `.github/workflows/solver.yml` compiles it to WebAssembly whenever `solver/` changes and commits the result to `public/solver/pkg-mt` (multi-threaded) and `public/solver/pkg-st` (single-threaded, used by Safari). `public/_headers` turns on the cross-origin isolation the threaded version needs.
 - License: GNU AGPL v3 (see LICENSE), because the solver engine is AGPL. Anyone running a modified copy publicly must share their source.
 - `npm install`, then `npm run dev` for a local server at http://localhost:8787, `npm test` for 300 random hands with chip-balance checks, and `npm run deploy` to deploy from your own machine.
