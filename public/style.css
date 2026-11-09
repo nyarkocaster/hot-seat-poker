@@ -172,3 +172,13 @@ input[type=range]{flex:1;min-width:120px;accent-color:var(--brass)}
 .inline label{font-size:13px}
 input[type=password]{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 9px;min-height:36px}
 a.b{text-decoration:none;color:inherit;display:inline-flex;align-items:center;gap:4px}
+/* Table / Side by side / Solver views */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--bg);padding:5px 10px;font-size:13px;cursor:pointer;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--brass);color:#1a1405;font-weight:600}
+body.v-solver #game{display:none!important}
+body.v-both .wrap{max-width:1900px}
+body.v-both #duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+body.v-both #game{grid-template-columns:minmax(0,1fr)}
+@media (max-width:1100px){body.v-both #duo{grid-template-columns:minmax(0,1fr)}}
