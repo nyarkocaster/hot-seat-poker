@@ -25,8 +25,9 @@
     <span class="toolsw" id="toolsWrap" hidden><button class="b sm" type="button" id="toolsBtn" aria-expanded="false" aria-controls="toolsMenu">Tools</button>
       <span class="toolsmenu" id="toolsMenu" hidden role="group" aria-label="Study tools">
         <label class="toggle sm"><input type="checkbox" data-tool="odds"><span>Odds calculator <span class="muted">· pot odds, outs and EV, with the math</span></span></label>
+        <label class="toggle sm"><input type="checkbox" data-tool="notes"><span>Notes <span class="muted">· a tab per street, with a range to paint<span id="notesNote"></span></span></span></label>
         <label class="toggle sm"><input type="checkbox" data-tool="stove"><span>Poker stove <span class="muted">· equity of hands and ranges<span id="stoveNote"></span></span></span></label>
-        <span class="note">Only you see these. Turn them off here too.</span>
+        <span class="note">Only you see the odds calculator and stove. Notes are shared with the lobby, like the solver.</span>
       </span></span>
     <span class="seg" id="viewSwitch" role="group" aria-label="Show" hidden><button type="button" data-view-mode="table" aria-pressed="true">Table</button><button type="button" data-view-mode="both" aria-pressed="false">Side by side</button><button type="button" data-view-mode="solver" aria-pressed="false">Solver</button></span>
     <button class="b sm" type="button" id="dockReset" hidden title="Put every panel back in its starting place">Reset layout</button>
@@ -68,11 +69,12 @@
       <div class="panel" id="solvePanel" hidden></div>
       <div class="panel tool" id="oddsPanel" data-anc="odds" hidden></div>
       <div class="panel tool" id="stovePanel" data-anc="stove" hidden></div>
+      <div class="panel nb" id="notesPanel" data-anc="svnotes" hidden></div>
       <div class="panel" id="logPanel" data-anc="log"><h2>Hand log</h2><ul class="log" id="log"></ul></div>
     </div>
     <aside id="side" data-anc="side"></aside>
   </div>
-  <section id="solverPane" hidden><div id="solverRoot"></div><div class="panel nb" id="notesPanel" data-anc="svnotes"></div></section>
+  <section id="solverPane" hidden><div id="solverRoot"></div><div id="svPal" hidden></div></section>
   </div>
 </div>
 <div class="modal" id="modal" hidden></div>
