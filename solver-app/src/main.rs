@@ -152,6 +152,7 @@ fn on_message(text: &str, st: &Arc<State>, tx: &Sender<String>) {
             let compress = m["compress"].as_bool().unwrap_or(false);
             let target = f(&m, "target") as f32;
             let max_iter = (m["maxIter"].as_u64().unwrap_or(1000) as u32).clamp(1, 100000);
+            let locks = m["locks"].clone();
             let st2 = st.clone();
             let tx2 = tx.clone();
             st.stop.store(false, Ordering::SeqCst);
@@ -174,6 +175,15 @@ fn on_message(text: &str, st: &Arc<State>, tx: &Sender<String>) {
                 println!("Solving (about {} of memory)…", gb(need));
                 let t0 = Instant::now();
                 solver.allocate_memory(compress);
+                // node locks: [{hist:[..], s:[..], acts:".."}]; report each one ("" = set)
+                if let Some(locks) = locks.as_array() {
+                    let res: Vec<String> = locks.iter().map(|l| {
+                        let hist: Vec<u32> = l["hist"].as_array().map(|a| a.iter().filter_map(|x| x.as_u64()).map(|x| x as u32).collect()).unwrap_or_default();
+                        let strat: Vec<f32> = l["s"].as_array().map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0) as f32).collect()).unwrap_or_default();
+                        solver.lock_at(&hist, &strat, l["acts"].as_str().unwrap_or(""))
+                    }).collect();
+                    if !res.is_empty() { send(json!({"t":"locks","res":res})); }
+                }
                 send(json!({"t":"progress","i":0,"e":null}));
                 let (mut i, mut e) = (0u32, f32::INFINITY);
                 let mut stopped = false;
