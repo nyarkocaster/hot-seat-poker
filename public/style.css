@@ -497,3 +497,8 @@ body:not(.dragging) .pal.nest > .dcol:empty{display:none}
 .drt{max-width:420px}
 .drdot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px}
 .drfoot{flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+/* Discord invite */
+.dcgrp .dcrow{flex-wrap:wrap;gap:6px;align-items:center}
+.dcgrp input[type=url]{flex:1;min-width:220px}
+.dcgrp .field{margin:8px 0}
+.dcok{color:var(--ok)}

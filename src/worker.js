@@ -11,6 +11,8 @@ const rid=n=>{const al="abcdefghjkmnpqrstuvwxyz23456789";const a=new Uint32Array
 async function sha(s){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
 const normCode=c=>String(c||"").trim().toUpperCase().replace(/\s+/g,"").slice(0,40);
 const cleanName=n=>String(n||"").replace(/[\u0000-\u001f\u007f​-‏‪-‮]/g,"").trim().slice(0,16);
+const DC_RE=/^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/webhooks\/\d{5,25}\/[\w-]{20,100}$/;
+const DC_AUTO_GAP=30*60*1000, DC_MANUAL_GAP=60*1000;
 const lobbyStub=(env,id)=>env.LOBBY.get(env.LOBBY.idFromName(id));
 const dirStub=env=>env.DIRECTORY.get(env.DIRECTORY.idFromName("main"));
 const MAX_LOBBIES=200, MAX_SOCKETS=80;
@@ -58,8 +60,8 @@ export class Lobby extends DurableObject{
     this.E=createEngine(); this.meta=null; this.toks={}; this.fails=[]; this.curs=new Map(); this.lastDir=""; this.sv=null; this.nb=null; this.poll=null;
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}','{"t":"pong"}'));
     ctx.blockConcurrencyWhile(async()=>{
-      const v=await ctx.storage.get(["meta","g","hist","toks","sv","nb","poll","pf"]);
-      this.meta=v.get("meta")||null; this.toks=v.get("toks")||{}; this.sv=v.get("sv")||null; this.nb=v.get("nb")||null; this.poll=v.get("poll")||null; this.pf=v.get("pf")||{};
+      const v=await ctx.storage.get(["meta","g","hist","toks","sv","nb","poll","pf","dc"]);
+      this.meta=v.get("meta")||null; this.toks=v.get("toks")||{}; this.sv=v.get("sv")||null; this.nb=v.get("nb")||null; this.poll=v.get("poll")||null; this.pf=v.get("pf")||{}; this.dc=v.get("dc")||{};
       if(v.get("g")) this.E.G=v.get("g");
       (v.get("hist")||[]).forEach(h=>this.E.history.push(h));
     });
@@ -75,7 +77,7 @@ export class Lobby extends DurableObject{
     if(!(await this.checkCode(code))) return {ok:false,error:"That teacher code doesn't match this lobby."};
     id=this.meta.id;
     // Clear this lobby first, so nothing it does while people disconnect can re-list it.
-    this.meta=null; this.E.G=null; this.E.history.length=0; this.toks={}; this.lastDir=""; this.curs.clear(); this.sv=null; this.nb=null; this.poll=null; this.pf={};
+    this.meta=null; this.E.G=null; this.E.history.length=0; this.toks={}; this.lastDir=""; this.curs.clear(); this.sv=null; this.nb=null; this.poll=null; this.pf={}; this.dc={};
     await dirStub(this.env).remove(id);
     await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll();
     for(const ws of this.ctx.getWebSockets()){try{ws.send(JSON.stringify({t:"deleted"}));ws.close(4004,"Lobby deleted")}catch(e){}}
@@ -98,6 +100,25 @@ export class Lobby extends DurableObject{
   }
   sockets(){return this.ctx.getWebSockets().map(ws=>({ws,a:ws.deserializeAttachment()||{}})).filter(x=>x.a.role&&x.ws.readyState===1)}
   send(ws,o){try{ws.send(JSON.stringify(o))}catch(e){}}
+  dcFor(){const d=this.dc||{};return {t:"dc",has:!!d.url,hint:d.url?"…"+d.url.slice(-6):"",auto:!!d.auto,last:d.last||0}}
+  // post "the table is open" to the lobby's Discord channel
+  async dcPost(by,msg,here,auto){
+    const d=this.dc||{}; if(!d.url||!this.meta||!this.E.G) return {ok:false,err:"No Discord channel set."};
+    d.last=Date.now(); this.dc=d; await this.ctx.storage.put("dc",d);
+    const G=this.E.G, origin=(this.env&&this.env.SITE_ORIGIN)||"https://hotseatpoker.com", link=`${origin}/play/#lobby-${this.meta.id}`;
+    const seated=G.seats.filter((x,i)=>i<G.size&&x.uid).length, name=G.lname||this.meta.name;
+    const body={username:"Hot Seat Poker",allowed_mentions:{parse:here?["everyone"]:[]},content:here?"@here":undefined,
+      embeds:[{title:`\u{1F0CF} ${name} is open`,url:link,color:0xD9A441,timestamp:new Date().toISOString(),footer:{text:"Hot Seat Poker"},
+        description:`${by||"A teacher"} ${auto?"just opened":"is running"} the table${msg?`: ${msg}`:"."}\n**${seated} of ${G.size} seats taken** \u00b7 blinds $${G.blinds.sb}/$${G.blinds.bb}\n\n[**Join the table \u2192**](${link})`}]};
+    try{
+      const target=(this.env&&this.env.DC_TEST_ENDPOINT)||d.url;
+      const r=await fetch(target+(target.includes("?")?"&":"?")+"wait=true",{method:"POST",headers:{"content-type":"application/json","x-hook":this.env&&this.env.DC_TEST_ENDPOINT?d.url:""},body:JSON.stringify(body)});
+      if(r.ok) return {ok:true};
+      if(r.status===404||r.status===401) return {ok:false,err:"Discord says this webhook doesn't exist anymore. Paste a new one."};
+      if(r.status===429) return {ok:false,err:"Discord is limiting posts right now. Try again in a minute."};
+      return {ok:false,err:`Discord didn't take the post (error ${r.status}).`};
+    }catch(e){return {ok:false,err:"Couldn't reach Discord."}}
+  }
   stateFor(a,pub){
     const E=this.E;
     if(a.role==="teacher") return {t:"state",now:Date.now(),g:E.G,hist:E.history.length};
@@ -173,6 +194,12 @@ export class Lobby extends DurableObject{
       a.sv=false; ws.serializeAttachment(a); this.svGate(ws,a);
       this.send(ws,this.pollFor(a));
       this.send(ws,{t:"pf",charts:this.pf||{}});
+      if(role==="teacher"){
+        this.send(ws,this.dcFor());
+        // auto-post "table is open" when a teacher arrives and none was here in the last half hour
+        const others=this.sockets().some(x=>x.ws!==ws&&x.a.role==="teacher");
+        if(this.dc&&this.dc.url&&this.dc.auto&&!others&&Date.now()-(this.dc.last||0)>DC_AUTO_GAP) this.ctx.waitUntil(this.dcPost(a.name,"",false,true));
+      }
       this.broadcastPeers(); await this.dirUpdate();
       return;
     }
@@ -263,6 +290,25 @@ export class Lobby extends DurableObject{
         if(Object.keys(pf).length>80) return;
         this.pf=pf; await this.ctx.storage.put("pf",pf);
         for(const {ws:o} of this.sockets()) this.send(o,{t:"pf",charts:pf});
+        return;}
+      case "dc":{ // Discord: a teacher sets the lobby's channel webhook, or posts that the table is open
+        if(a.role!=="teacher") return;
+        const dc={...(this.dc||{})};
+        if(m.op==="set"){
+          const url=String(m.url||"").trim();
+          if(!DC_RE.test(url)){this.send(ws,{...this.dcFor(),err:"That isn't a Discord webhook link. In Discord: channel settings › Integrations › Webhooks › Copy Webhook URL."});return}
+          dc.url=url; if(dc.auto==null) dc.auto=true;
+        } else if(m.op==="clear"){delete dc.url}
+        else if(m.op==="auto"){dc.auto=!!m.v}
+        else if(m.op==="post"){
+          if(!dc.url) return;
+          if(Date.now()-(dc.last||0)<DC_MANUAL_GAP){this.send(ws,{...this.dcFor(),err:"You just posted. Wait a minute before posting again."});return}
+          const r=await this.dcPost(a.name,String(m.msg==null?"":m.msg).replace(/[\u0000-\u001f\u007f]/g," ").trim().slice(0,300),!!m.here,false);
+          this.send(ws,{...this.dcFor(),...(r.ok?{ok:"Posted to Discord."}:{err:r.err})});
+          return;
+        } else return;
+        this.dc=dc; await this.ctx.storage.put("dc",dc);
+        for(const {ws:o,a:x} of this.sockets()) if(x.role==="teacher") this.send(o,{...this.dcFor(),...(o===ws&&m.op==="set"?{ok:"Saved. Use \u201cPost to Discord\u201d to try it."}:{})});
         return;}
       case "svq":{ // ask the computer that solved for one spot in the tree
         if(!this.svOk(a)||!this.sv||!this.sv.host) return;

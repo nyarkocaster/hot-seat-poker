@@ -62,6 +62,7 @@ function onMsg(m){
   }
   else if(m.t==="nb"){if(NB) NB.onMessage(m)}
   else if(m.t==="pf"){if(CH) CH.onMessage(m)}
+  else if(m.t==="dc"){DCS=m;dcBusy=false;if(m.has&&!m.err) dcUrl="";if(m.ok||m.err) dcNote={ok:m.ok,err:m.err,at:Date.now()};render()}
   else if(m.t==="poll"){POLL=m.poll||null;if(POLL&&pollPick&&pollPick.id!==POLL.id) pollPick=null;if(POLL&&POLL.id!==pollSeen){pollSeen=POLL.id;pollMin=false}renderPoll()}
 }
 
@@ -493,7 +494,7 @@ function renderTeacherSide(){
       <div class="row" style="margin-top:8px">${!between()?`<button class="b" type="button" data-cmd="voidhand">Cancel this hand</button>`:""}
       ${confirmReset?`<span class="confirm"><span>Reset table, stacks and log?</span><button class="b sm warn" type="button" data-cmd="reset">Reset</button><button class="b sm" type="button" data-cmd="noreset">Keep</button></span>`:`<button class="b warn" type="button" data-cmd="askreset">Reset table…</button>`}</div></div></div>`;
   } else {
-    h+=`<div class="students" id="stuList"></div>
+    h+=dcGroup()+`<div class="students" id="stuList"></div>
       ${local?"":`<p class="note">Students open <b>${esc(location.host)}/play</b>, pick <b>${esc(G.lname||L.name)}</b> from the lobby list, and tap an open seat. Or send them this link: <b>${esc(location.origin)}/play/#lobby-${esc(L.id)}</b>. Co-teachers join with the teacher code; you'll see each other's pointers, and a colored outline marks whatever another teacher is editing.</p>`}`;
   }
   h+=`</div>`;
@@ -509,6 +510,22 @@ function renderPeople(){
   let h=`<div class="sub">Teachers</div>`+T.map(p=>`<div class="stu"><span><span class="sw" style="background:${colOf(p.peer)}"></span>${nm(p)}${p.peer===myPeer?' <span class="muted">(you)</span>':""}</span><span class="muted">Teacher</span></div>`).join("");
   h+=`<div class="sub">Students</div>`+(Ss.length?Ss.map(p=>`<div class="stu"><span>${nm(p)}</span><span class="muted">${p.seat>=0?"Seat "+(p.seat+1):"Watching"}</span></div>`).join(""):`<p class="note">No students here yet.</p>`);
   setHTML(el,h);
+}
+/* ---------- Discord: post "the table is open" to the group's channel (teachers) ---------- */
+let DCS=null, dcNote=null, dcUrl="", dcMsg="", dcBusy=false;
+function dcGroup(){
+  if(mode!=="lobby"||!isT()||!DCS) return "";
+  const note=dcNote&&Date.now()-dcNote.at<20000?(dcNote.err?`<p class="err" role="status">${esc(dcNote.err)}</p>`:`<p class="note dcok" role="status">${esc(dcNote.ok)}</p>`):"";
+  if(!DCS.has) return `<div class="group dcgrp"><h3>Invite on Discord</h3>
+    <p class="note">Post “the table is open” with a join link to your group's Discord channel. In Discord, open the channel's settings › <b>Integrations</b> › <b>Webhooks</b> › <b>New Webhook</b> › <b>Copy Webhook URL</b>, then paste it here.</p>
+    <div class="row dcrow"><input type="url" id="dcUrl" placeholder="https://discord.com/api/webhooks/…" value="${esc(dcUrl)}" autocomplete="off" aria-label="Discord webhook link"><button class="b sm" type="button" data-cmd="dcset"${dcBusy?" disabled":""}>Save</button></div>${note}</div>`;
+  const ago=DCS.last?Math.round((Date.now()-DCS.last)/60000):null;
+  return `<div class="group dcgrp"><h3>Invite on Discord</h3>
+    <p class="note">Posting to the channel webhook ending in <code>${esc(DCS.hint)}</code>. <button type="button" class="linkbtn" data-cmd="dcclear">Remove</button></p>
+    <label class="toggle"><input type="checkbox" id="dcAuto"${DCS.auto?" checked":""}><span>Post automatically when a teacher opens the table<br><span class="note">At most once every 30 minutes.</span></span></label>
+    <div class="field"><label for="dcMsg">Message <span class="muted">(optional)</span></label><input type="text" id="dcMsg" maxlength="300" placeholder="Like “River bluffs tonight, all levels welcome”" value="${esc(dcMsg)}"></div>
+    <div class="row dcrow"><button class="b primary sm" type="button" data-cmd="dcpost"${dcBusy?" disabled":""}>Post to Discord</button><label class="toggle sm"><input type="checkbox" id="dcHere"><span>Notify the channel (@here)</span></label></div>
+    <p class="note">${ago==null?"Nothing posted yet.":`Last posted ${ago<1?"just now":ago<60?ago+" min ago":Math.round(ago/60)+" h ago"}.`}</p>${note}</div>`;
 }
 function setSide(h){
   const side=$("#side"); const f=document.activeElement; const fid=f&&side.contains(f)&&f.id;
@@ -673,6 +690,9 @@ document.addEventListener("click",e=>{
     if(c==="bombNext"){sendOp({t:"bombNext",v:!E.G.bombNext});return}
     if(c==="time"){sendOp({t:"time"});return}
     if(c==="rakereset"){sendOp({t:"rakereset"});return}
+    if(c==="dcset"){const u=($("#dcUrl")||{}).value||dcUrl;dcUrl=u;wsSend({t:"dc",op:"set",url:u.trim()});return}
+    if(c==="dcclear"){wsSend({t:"dc",op:"clear"});dcNote=null;return}
+    if(c==="dcpost"){const here=!!($("#dcHere")||{}).checked;dcBusy=true;render();setTimeout(()=>{dcBusy=false;render()},4000);wsSend({t:"dc",op:"post",msg:dcMsg,here});return}
     if(c==="askreset"){confirmReset=true;render();return}
     if(c==="noreset"){confirmReset=false;render();return}
     if(c==="reset"){confirmReset=false;sendOp({t:"reset"});return}
@@ -691,10 +711,13 @@ document.addEventListener("input",e=>{
   else if(t.id==="amtNum"){const r=$("#amtRange");if(r) r.value=t.value;updRaiseLabel()}
   else if(t.id==="homeName"){myName=t.value.slice(0,16);lsSet("hsp-name",myName)}
   else if(t.dataset.pin){pollInput(t)}
+  else if(t.id==="dcUrl"){dcUrl=t.value}
+  else if(t.id==="dcMsg"){dcMsg=t.value}
 });
 document.addEventListener("change",e=>{
   if(e.target.dataset.tool){setTool(e.target.dataset.tool,e.target.checked);return}
   const t=e.target; if(!mode||!isT()) return;
+  if(t.id==="dcAuto"){wsSend({t:"dc",op:"auto",v:t.checked});return}
   if(t.dataset.rule){const k=t.dataset.rule;sendOp({t:"rule",k,v:t.type==="checkbox"?t.checked:t.tagName==="SELECT"&&k!=="clock"?t.value:+t.value});return}
   if(t.dataset.name!=null){sendOp({t:"name",i:+t.dataset.name,v:t.value})}
   else if(t.dataset.stack!=null){sendOp({t:"stack",i:+t.dataset.stack,v:+t.value})}
