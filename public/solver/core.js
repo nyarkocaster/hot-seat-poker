@@ -176,7 +176,7 @@ export function createSolver(root, opt = {}) {
   const T = opt.transport || null, TB = opt.table || null, shared = !!T;
   const me = () => (shared ? T.peer() : "me");
   let sv = defaultShared();
-  let tab = 0, paintW = 1, explore = false, myPath = null, selCell = null, view = "strat";
+  let tab = 0, paintW = 1, deckOpen = false, explore = false, myPath = null, selCell = null, view = "strat";
   let engine = null, engineSolveId = null, appTried = false, bigMsg = null, localErr = "", viewPinned = false;
   const cache = new Map(), pending = new Map();
   let tablePath = null, tableKey = "", node = null, nodeKey = "", gen = 0;
@@ -192,7 +192,7 @@ export function createSolver(root, opt = {}) {
         <p class="note" id="sv-note" hidden></p>
         <div class="field" id="sv-pairF" hidden><label for="sv-pair">Players to study</label><select id="sv-pair"></select></div>
         <div class="field"><label>Board <span class="muted">(3 to 5 cards, tap to add or remove)</span></label>
-          <div class="boardrow" id="sv-boardShow"></div>
+          <div class="boardline"><div class="boardrow" id="sv-boardShow"></div><button class="b sm" type="button" id="sv-deckT" aria-expanded="false" aria-controls="sv-deck" hidden>Change board</button></div>
           <div class="deck sdeck" id="sv-deck"${anc("svdeck")}></div>
         </div>
         <div class="fields">
@@ -208,15 +208,19 @@ export function createSolver(root, opt = {}) {
           <button class="tab" role="tab" type="button" id="sv-tab0" aria-selected="true">Out of position</button>
           <button class="tab" role="tab" type="button" id="sv-tab1" aria-selected="false">In position</button>
         </div>
+        <div class="rlay">
+        <div class="rlay-c">
         <div class="fields">
           <div class="field"><label for="sv-who">Player</label><input type="text" id="sv-who" maxlength="24"></div>
           <div class="field"><label for="sv-preset">Load a starting range</label><select id="sv-preset"><option value="">Choose…</option>${Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join("")}</select></div>
         </div>
-        <div class="rgrid" id="sv-rgrid"${anc("svrgrid")} aria-label="Range grid"></div>
         <div class="row paint"><label for="sv-paintW">Tap paints</label><input type="range" id="sv-paintW" min="0" max="100" step="5" value="100"><span id="sv-paintTxt">100%</span>
           <button class="b sm" type="button" id="sv-clearR">Clear</button></div>
         <div class="field"><label for="sv-rtext">Range text</label><textarea id="sv-rtext" rows="3" spellcheck="false"></textarea></div>
         <p class="note" id="sv-rinfo"></p>
+        </div>
+        <div class="rgrid" id="sv-rgrid"${anc("svrgrid")} aria-label="Range grid"></div>
+        </div>
       </div>
       <div class="panel" id="sv-pSizes"${anc("svsizes")}>
         <h2>Bet sizes</h2>
@@ -256,10 +260,12 @@ export function createSolver(root, opt = {}) {
           <div class="lockbar" id="sv-lockBar"></div>
           <div class="locked" id="sv-lockEd"${anc("svlock")} hidden></div>
           <div class="lockcmp" id="sv-lockCmp"></div>
-          <div class="rgrid res" id="sv-sgrid"${anc("svgrid")}></div>
-          <div class="legend" id="sv-legend"></div>
-          <div class="detail" id="sv-detail"></div>
-          <details class="eqgd" id="sv-eqgD" open><summary>Equity graph</summary><div id="sv-eqg"${anc("sveqg")}></div></details>
+          <div class="rlay reslay">
+          <div class="rlay-g"><div class="rgrid res" id="sv-sgrid"${anc("svgrid")}></div>
+          <div class="legend" id="sv-legend"></div></div>
+          <div class="rlay-c"><div class="detail" id="sv-detail"></div>
+          <details class="eqgd" id="sv-eqgD" open><summary>Equity graph</summary><div id="sv-eqg"${anc("sveqg")}></div></details></div>
+          </div>
         </div>
       </div>
     </section>
@@ -315,7 +321,14 @@ export function createSolver(root, opt = {}) {
       h += cardHTML(id, on ? "cur" : "", "button", `type="button" data-card="${id}" aria-pressed="${on}"${!canEdit() || (!on && b.length >= 5) ? " disabled" : ""}`);
     }
     setHTML($("deck"), h);
+    // once the board is set, the deck folds away to save room; "Change board" opens it again
+    const full = b.length >= 3, open = !full || deckOpen;
+    $("deck").hidden = !open || !canEdit();
+    $("deckT").hidden = !full || !canEdit();
+    $("deckT").textContent = deckOpen ? "Done" : "Change board";
+    $("deckT").setAttribute("aria-expanded", String(open));
   }
+  $("deckT").onclick = () => { deckOpen = !deckOpen; renderBoard(); };
   $("deck").onclick = e => {
     const btn = e.target.closest("[data-card]"); if (!btn || !canEdit()) return;
     const id = +btn.dataset.card, b = sv.spot.board.slice(), i = b.indexOf(id);
