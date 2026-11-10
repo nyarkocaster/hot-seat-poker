@@ -75,4 +75,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add public/solver/pkg-mt public/solver/pkg-st
-          git diff --cached --quiet && echo "No changes" || (git commit -m "Build solver WebAssembly" && git push)
+          git diff --cached --quiet && echo "No changes" || git commit -m "Build solver WebAssembly"
+          # main may have moved on while this ran: catch up, then push (try a few times)
+          for i in 1 2 3; do git pull --rebase origin main && git push && break; sleep 5; done
