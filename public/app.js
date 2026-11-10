@@ -759,7 +759,7 @@ const IN_DISCORD=new URLSearchParams(location.search).has("frame_id");
 if(IN_DISCORD){
   document.body.classList.add("in-discord");
   homeErr("Connecting to Discord…");
-  import("./discord.js").then(m=>m.startDiscord()).then(j=>{
+  import("./discord.js").then(m=>m.startDiscord(t=>homeErr(t))).then(j=>{
     homeErr(""); myName=j.name; $("#homeName").value=j.name; lsSet("hsp-name",myName);
     if(j.role==="teacher"&&j.code) saveCode(j.id,j.code);
     enterLobby(j.id,j.role,j.code);

@@ -12,12 +12,21 @@ async function post(path, body) {
 }
 
 let sdk = null;
-export async function startDiscord() {
+const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+// onStep(text) shows what it's waiting for, so a stuck step is easy to spot
+export async function startDiscord(onStep = () => {}) {
+  onStep("Loading Discord's toolkit…");
   if (window.__hspDiscordMock) sdk = window.__hspDiscordMock; // tests
   else { const { DiscordSDK } = await import("./vendor/discord-sdk.js"); sdk = new DiscordSDK(DISCORD_ID); }
-  await sdk.ready();
-  const { code } = await sdk.commands.authorize({ client_id: DISCORD_ID, response_type: "code", state: "", prompt: "none", scope: ["identify"] });
-  const { access_token } = await post("/api/discord/token", { code });
-  await sdk.commands.authenticate({ access_token });
-  return post("/api/discord/join", { access_token, instance: sdk.instanceId });
+  onStep("Waiting for Discord to answer… (step 1 of 4)");
+  await withTimeout(sdk.ready(), 20000, "Discord didn't answer the first handshake (step 1). Close the Activity and open it again.");
+  onStep("Asking Discord to sign you in… If a Discord window asks to authorize Hot Seat Poker, press Authorize. (step 2 of 4)");
+  let code;
+  try { ({ code } = await withTimeout(sdk.commands.authorize({ client_id: DISCORD_ID, response_type: "code", state: "", prompt: "none", scope: ["identify"] }), 120000, "Discord didn't finish signing you in (step 2).")); }
+  catch (e) { throw new Error(e && e.message ? (/step 2/.test(e.message) ? e.message : "Discord refused the sign-in (step 2): " + e.message) : "Discord refused the sign-in (step 2)."); }
+  onStep("Signing in… (step 3 of 4)");
+  const { access_token } = await withTimeout(post("/api/discord/token", { code }), 20000, "The site didn't answer the sign-in (step 3).");
+  await withTimeout(sdk.commands.authenticate({ access_token }), 20000, "Discord didn't accept the sign-in (step 3).");
+  onStep("Finding your table… (step 4 of 4)");
+  return withTimeout(post("/api/discord/join", { access_token, instance: sdk.instanceId }), 20000, "The site didn't answer when looking for your table (step 4).");
 }
