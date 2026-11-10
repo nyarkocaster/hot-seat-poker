@@ -12,6 +12,11 @@ async function post(path, body) {
 }
 
 let sdk = null;
+// open a page outside Discord (Discord asks the player to confirm)
+export function openLink(url) {
+  if (sdk && sdk.commands && sdk.commands.openExternalLink) return sdk.commands.openExternalLink({ url });
+  window.open(url, "_blank", "noopener");
+}
 const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
 // onStep(text) shows what it's waiting for, so a stuck step is easy to spot
 export async function startDiscord(onStep = () => {}) {

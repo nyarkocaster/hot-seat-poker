@@ -33,8 +33,10 @@ export default {
         const name=cleanName(b.name)||"Study table", code=normCode(b.code);
         if(code.length<4) return json({error:"The teacher code needs at least 4 letters or numbers."},400);
         const dir=dirStub(env); if((await dir.count())>=MAX_LOBBIES) return json({error:"There are too many lobbies. Delete an old one first."},429);
+        const pw=String(b.pw||"").trim();
+        if(pw&&(pw.length<3||pw.length>40)) return json({error:"The password needs 3 to 40 characters."},400);
         const id=rid(6);
-        await lobbyStub(env,id).init(id,String(b.name||"").trim().slice(0,28)||name,await sha(id+"|"+code));
+        await lobbyStub(env,id).init(id,String(b.name||"").trim().slice(0,28)||name,await sha(id+"|"+code),pw?await sha(id+"|pw|"+pw):null);
         return json({id});
       }
       if(p==="/api/discord/token"&&req.method==="POST"){
@@ -91,8 +93,8 @@ export class Lobby extends DurableObject{
       (v.get("hist")||[]).forEach(h=>this.E.history.push(h));
     });
   }
-  async init(id,name,hash){
-    this.meta={id,name,hash,created:Date.now()}; this.E.G=freshGame(name); this.E.history.length=0;
+  async init(id,name,hash,pw){
+    this.meta={id,name,hash,created:Date.now()}; if(pw) this.meta.pw=pw; this.E.G=freshGame(name); this.E.history.length=0;
     await this.ctx.storage.put({meta:this.meta,g:this.E.G,hist:[],toks:{}});
     await this.dirUpdate(true);
   }
@@ -125,6 +127,15 @@ export class Lobby extends DurableObject{
     if(this.fails.length>=8) return false;
     const ok=(await sha(this.meta.id+"|"+normCode(code)))===this.meta.hash;
     if(!ok) this.fails.push(now);
+    return ok;
+  }
+  // a password-protected lobby: students need the password (teachers use the teacher code)
+  async checkPw(pw){
+    if(!this.meta.pw) return true;
+    const now=Date.now(); this.fails=this.fails.filter(t=>now-t<60000);
+    if(this.fails.length>=8) return false;
+    const ok=(await sha(this.meta.id+"|pw|"+String(pw||"").trim()))===this.meta.pw;
+    if(!ok&&pw) this.fails.push(now);
     return ok;
   }
   async fetch(req){
@@ -169,7 +180,7 @@ export class Lobby extends DurableObject{
   /* shared solver: teachers always; students when the teacher's setting allows it right now */
   svOk(a){
     if(a.role==="teacher") return true;
-    const G=this.E.G, w=(G.rules&&G.rules.solverStudents)||"between";
+    const G=this.E.G, w=(G.rules&&G.rules.solverStudents)||"always";
     return w==="always"||(w==="between"&&(G.phase==="idle"||G.phase==="done"));
   }
   svGate(ws,a){
@@ -204,7 +215,7 @@ export class Lobby extends DurableObject{
     const G=this.E.G, socks=this.sockets();
     const s={id:this.meta.id,name:G.lname||this.meta.name,created:this.meta.created,stakes:`$${G.blinds.sb}/$${G.blinds.bb}`,size:G.size,
       seated:G.seats.filter((x,i)=>i<G.size&&x.uid).length,hand:G.hand,teachers:socks.filter(x=>x.a.role==="teacher").length,
-      students:socks.filter(x=>x.a.role==="student").length};
+      students:socks.filter(x=>x.a.role==="student").length,locked:!!this.meta.pw};
     s.live=s.teachers>0;
     const k=JSON.stringify(s); if(!force&&k===this.lastDir) return; this.lastDir=k;
     try{await dirStub(this.env).put(s)}catch(e){}
@@ -224,8 +235,9 @@ export class Lobby extends DurableObject{
       if(!this.toks[cid]){const keys=Object.keys(this.toks);if(keys.length>2000) delete this.toks[keys[0]];this.toks[cid]=th;await this.ctx.storage.put("toks",this.toks)}
       const role=m.role==="teacher"?"teacher":"student";
       if(role==="teacher"&&!(await this.checkCode(m.code))){this.send(ws,{t:"error",code:"badcode",msg:this.fails.length>=8?"Too many wrong codes. Wait a minute and try again.":"That teacher code doesn't match this lobby."});ws.close(4001,"Bad code");return}
+      if(role==="student"&&this.meta.pw&&!(await this.checkPw(m.pw))){this.send(ws,{t:"error",code:"needpw",msg:this.fails.length>=8?"Too many wrong passwords. Wait a minute and try again.":m.pw?"That password doesn't match this lobby.":"This lobby needs a password."});ws.close(4002,"Password");return}
       Object.assign(a,{cid,role,name:cleanName(m.name)||(role==="teacher"?"Teacher":"Student")}); ws.serializeAttachment(a);
-      this.send(ws,{t:"welcome",role,peer:a.peer,lobby:{id:this.meta.id,name:this.E.G.lname||this.meta.name}});
+      this.send(ws,{t:"welcome",role,peer:a.peer,lobby:{id:this.meta.id,name:this.E.G.lname||this.meta.name,locked:!!this.meta.pw,discord:!!this.meta.private}});
       this.send(ws,this.stateFor(a,this.E.pubView()));
       for(const [peer,c] of this.curs) if(peer!==a.peer) this.send(ws,c);
       a.sv=false; ws.serializeAttachment(a); this.svGate(ws,a);
@@ -327,6 +339,14 @@ export class Lobby extends DurableObject{
         if(Object.keys(pf).length>80) return;
         this.pf=pf; await this.ctx.storage.put("pf",pf);
         for(const {ws:o} of this.sockets()) this.send(o,{t:"pf",charts:pf});
+        return;}
+      case "lockpw":{ // a teacher sets or removes the lobby's password
+        if(a.role!=="teacher"||this.meta.private) return;
+        const pw=String(m.pw||"").trim();
+        if(pw&&(pw.length<3||pw.length>40)){this.send(ws,{t:"error",msg:"The password needs 3 to 40 characters."});return}
+        if(pw) this.meta.pw=await sha(this.meta.id+"|pw|"+pw); else delete this.meta.pw;
+        await this.ctx.storage.put("meta",this.meta); await this.dirUpdate(true);
+        for(const {ws:o} of this.sockets()) this.send(o,{t:"locked",on:!!this.meta.pw});
         return;}
       case "dc":{ // Discord: a teacher sets the lobby's channel webhook, or posts that the table is open
         if(a.role!=="teacher") return;

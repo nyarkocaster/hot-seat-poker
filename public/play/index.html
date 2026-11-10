@@ -24,12 +24,13 @@
     <span class="spacer"></span>
     <span class="toolsw" id="toolsWrap" hidden><button class="b sm" type="button" id="toolsBtn" aria-expanded="false" aria-controls="toolsMenu">Tools</button>
       <span class="toolsmenu" id="toolsMenu" hidden role="group" aria-label="Study tools">
-        <label class="toggle sm"><input type="checkbox" data-tool="odds"><span>Odds calculator <span class="muted">· pot odds, outs and EV, with the math</span></span></label>
+        <label class="toggle sm"><input type="checkbox" data-tool="odds"><span>Odds calculator <span class="muted">· pot odds, outs and EV, with the math<span id="oddsNote"></span></span></span></label>
         <label class="toggle sm"><input type="checkbox" data-tool="notes"><span>Notes <span class="muted">· a tab per street, with a range to paint<span id="notesNote"></span></span></span></label>
         <label class="toggle sm"><input type="checkbox" data-tool="stove"><span>Poker stove <span class="muted">· equity of hands and ranges<span id="stoveNote"></span></span></span></label>
-        <label class="toggle sm"><input type="checkbox" data-tool="charts"><span>Preflop charts <span class="muted">· the starting ranges everyone loads</span></span></label>
+        <label class="toggle sm"><input type="checkbox" data-tool="charts"><span>Preflop charts <span class="muted">· the starting ranges everyone loads<span id="chartsNote"></span></span></span></label>
         <span class="note">Only you see the odds calculator and stove. Notes are shared with the lobby, like the solver. Teachers edit the preflop charts; everyone can read them.</span>
       </span></span>
+    <button class="b sm" type="button" id="dcOpen" hidden title="Open this table in your web browser, outside Discord">Open in browser ↗</button>
     <span class="seg" id="viewSwitch" role="group" aria-label="Show" hidden><button type="button" data-view-mode="table" aria-pressed="true">Table</button><button type="button" data-view-mode="both" aria-pressed="false">Side by side</button><button type="button" data-view-mode="solver" aria-pressed="false">Solver</button></span>
     <button class="b sm" type="button" id="dockReset" hidden title="Put every panel back in its starting place">Reset layout</button>
     <a class="b sm" href="/learn/" target="_blank" rel="noopener">How it works</a>
@@ -40,6 +41,10 @@
   <section id="home" class="home">
     <div class="main">
       <div class="panel"><h2>Lobbies</h2><div class="lobs" id="dirList"><p class="note">Loading lobbies…</p></div></div>
+      <div class="panel" id="pwForm" hidden><h2>🔒 <span id="pwName"></span></h2>
+        <p class="note">This lobby has a password. Ask the person running it.</p>
+        <div class="row"><input type="password" id="pwIn" placeholder="Lobby password" autocomplete="off" aria-label="Lobby password" maxlength="40"><button class="b primary" type="button" id="pwGo">Join as student</button><button class="b" type="button" id="pwNo">Cancel</button></div>
+      </div>
       <div class="panel" id="teachForm" hidden><h2>Teach <span id="teachName"></span></h2>
         <p class="note">Enter the teacher code for this lobby. Students join without one.</p>
         <div class="row"><input type="password" id="teachCode" placeholder="Teacher code" autocomplete="off" aria-label="Teacher code"><button class="b primary" type="button" id="teachGo">Join as teacher</button><button class="b" type="button" id="teachCancel">Cancel</button></div>
@@ -49,9 +54,10 @@
         <div class="fields">
           <div class="field" style="grid-column:1/-1"><label for="newName">Lobby name</label><input type="text" id="newName" maxlength="28" placeholder="Tuesday study group"></div>
           <div class="field"><label for="newCode">Teacher code</label><input type="text" id="newCode" maxlength="40" autocomplete="off"></div>
+          <div class="field"><label for="newPw">Student password <span class="muted">(optional)</span></label><input type="text" id="newPw" maxlength="40" autocomplete="off" placeholder="Leave blank for an open lobby"></div>
           <div class="field" id="keyField" hidden><label for="newKey">Organizer key</label><input type="password" id="newKey" maxlength="80" autocomplete="off"></div>
         </div>
-        <p class="note">Give the teacher code only to people who should see every card and run the table with you. You'll need it to come back as a teacher, so write it down.</p>
+        <p class="note">Give the teacher code only to people who should see every card and run the table with you. You'll need it to come back as a teacher, so write it down. With a student password, the lobby shows a lock and students need the password to join.</p>
         <button class="b primary" type="button" id="createBtn">Create lobby</button>
       </div>
     </div>

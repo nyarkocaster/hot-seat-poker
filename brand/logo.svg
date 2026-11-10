@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="felt" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#22604a"/><stop offset="0.65" stop-color="#174634"/><stop offset="1" stop-color="#0e2b1f"/>
+    </radialGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0c766"/><stop offset="1" stop-color="#d49a2c"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="url(#felt)"/>
+  <rect x="34" y="34" width="956" height="956" rx="196" fill="none" stroke="#e0b04a" stroke-opacity=".28" stroke-width="6"/>
+  <!-- a spade -->
+  <path fill="url(#brass)" d="M512 168
+    C 590 268 790 380 790 552
+    C 790 664 704 728 620 728
+    C 576 728 548 712 532 694
+    C 540 772 576 818 650 852
+    L 374 852
+    C 448 818 484 772 492 694
+    C 476 712 448 728 404 728
+    C 320 728 234 664 234 552
+    C 234 380 434 268 512 168 Z"/>
+  <!-- with a flame in it: the hot seat -->
+  <path fill="#123a2b" d="M512 360
+    C 548 420 618 456 618 548
+    C 618 616 570 662 512 662
+    C 454 662 406 616 406 556
+    C 406 506 434 476 458 448
+    C 462 486 478 508 500 518
+    C 486 466 490 410 512 360 Z"/>
+</svg>

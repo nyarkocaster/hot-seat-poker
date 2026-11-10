@@ -26,19 +26,31 @@ let ws=null, wsOpen=false, wantWs=false, retry=0, retryT=null, pingT=null, lastE
 let PUB=null, MINE=null, HIST=0, peers=[], myPeer=null, skew=0, welcomed=false;
 const curs=new Map();
 let homeList=null, homeListErr=false, needsKey=false, homeMsg="", teachFor=null, delConfirm=false;
+const IN_DISCORD=new URLSearchParams(location.search).has("frame_id");
+// inside Discord, links to the site have to name it (the page itself runs on Discord's address)
+const SITE=/discordsays\.com$/.test(location.hostname)?"https://hotseatpoker.com":location.origin;
+let DSDK=null;
 const codes=()=>lsGet("hsp-codes")||{};
 function saveCode(id,code){const c=codes();c[id]=code;lsSet("hsp-codes",c)}
 function forgetCode(id){const c=codes();delete c[id];lsSet("hsp-codes",c)}
+// passwords for locked lobbies, kept on this device so reconnecting doesn't ask again
+const pws=()=>lsGet("hsp-pws")||{};
+function savePw(id,pw){const c=pws();if(pw) c[id]=pw; else delete c[id];lsSet("hsp-pws",c)}
+let pwFor=null, pendingHash=false;
 const isT=()=>ROLE==="teacher"&&!!E.G;
 
 function connect(){
   clearTimeout(retryT); if(!L||!wantWs) return;
   const s=new WebSocket(`${location.protocol==="https:"?"wss:":"ws:"}//${location.host}/ws/${L.id}`); ws=s;
-  s.onopen=()=>{if(ws!==s) return;retry=0;wsOpen=true;s.send(JSON.stringify({t:"hello",cid:ME.cid,tok:ME.tok,name:myName,role:ROLE,code:ROLE==="teacher"?TCODE:undefined}));sendCur(true);updateConn()};
+  s.onopen=()=>{if(ws!==s) return;retry=0;wsOpen=true;s.send(JSON.stringify({t:"hello",cid:ME.cid,tok:ME.tok,name:myName,role:ROLE,code:ROLE==="teacher"?TCODE:undefined,pw:ROLE==="teacher"?undefined:pws()[L.id]}));sendCur(true);updateConn()};
   s.onmessage=e=>{if(ws!==s) return;let m;try{m=JSON.parse(e.data)}catch(x){return}onMsg(m)};
   s.onclose=e=>{
     if(ws!==s) return; wsOpen=false; ws=null;
     if(!wantWs) return;
+    if(e.code===4002&&L){ // locked lobby: ask for the password
+      const id=L.id, name=L.name, had=!!pws()[id]; savePw(id,null);
+      leaveLobby(); pwFor={id,name}; homeErr(had?(lastErr||"That password doesn't match this lobby."):""); render(); setTimeout(()=>{const i=$("#pwIn");if(i) i.focus()},50); return;
+    }
     if([4000,4001,4004,4008].includes(e.code)){
       const id=L&&L.id, msg=lastErr||e.reason||"Couldn't open that lobby.";
       if(e.code===4001&&id) forgetCode(id);
@@ -49,7 +61,7 @@ function connect(){
 }
 function wsSend(o){if(ws&&wsOpen){ws.send(JSON.stringify(o));return true}flash("Reconnecting… try again in a moment.");return false}
 function onMsg(m){
-  if(m.t==="welcome"){welcomed=true;myPeer=m.peer;if(m.lobby&&L) L.name=m.lobby.name;if(ROLE==="teacher") saveCode(L.id,TCODE);updateConn()}
+  if(m.t==="welcome"){welcomed=true;myPeer=m.peer;if(m.lobby&&L){L.name=m.lobby.name;L.locked=!!m.lobby.locked;L.discord=!!m.lobby.discord}pwFor=null;if(ROLE==="teacher") saveCode(L.id,TCODE);updateConn()}
   else if(m.t==="state"){skew=(+m.now||Date.now())-Date.now();if(m.g){E.G=m.g;HIST=m.hist||0}else{PUB=m.pub;MINE=m.mine||null}render()}
   else if(m.t==="peers"){peers=Array.isArray(m.list)?m.list:[];for(const k of [...curs.keys()]) if(!peers.some(p=>p.peer===k)) curs.delete(k);updateConn();render();drawCursors()}
   else if(m.t==="cur"){if(!m.cur&&!(m.busy&&m.busy.length)) curs.delete(m.peer); else curs.set(m.peer,m);drawCursors();if(picker) render()}
@@ -62,6 +74,7 @@ function onMsg(m){
   }
   else if(m.t==="nb"){if(NB) NB.onMessage(m)}
   else if(m.t==="pf"){if(CH) CH.onMessage(m)}
+  else if(m.t==="locked"){if(L){L.locked=!!m.on;if(isT()) flash(m.on?"Students now need the password to join":"Anyone with the link can join now")}render()}
   else if(m.t==="dc"){DCS=m;dcBusy=false;if(m.has&&!m.err) dcUrl="";if(m.ok||m.err) dcNote={ok:m.ok,err:m.err,at:Date.now()};render()}
   else if(m.t==="poll"){POLL=m.poll||null;if(POLL&&pollPick&&pollPick.id!==POLL.id) pollPick=null;if(POLL&&POLL.id!==pollSeen){pollSeen=POLL.id;pollMin=false}renderPoll()}
 }
@@ -178,9 +191,11 @@ const solverAllowed=()=>!!mode&&(isT()||svOn);
 // the poker stove: teachers always; students per the table setting (never / between hands / any time)
 function stoveAllowed(){
   if(!mode) return false; if(isT()||mode==="local") return true;
-  const P=view(), w=(P&&P.rules&&P.rules.stoveStudents)||"between";
+  const P=view(), w=(P&&P.rules&&P.rules.stoveStudents)||"always";
   return w==="always"||(w==="between"&&!!P&&(P.phase==="idle"||P.phase==="done"));
 }
+// odds calculator and preflop charts: on for students unless the teacher turns them off
+const toolOk=k=>!!mode&&(isT()||mode==="local"||((view()&&view().rules&&view().rules[k+"Students"])||"always")!=="off");
 function setView(v){viewMode=v;lsSet("hsp-view",v);render()}
 function applyView(){
   const ok=solverAllowed(), v=ok?viewMode:"table";
@@ -189,12 +204,14 @@ function applyView(){
   const sw=$("#viewSwitch"); sw.hidden=!ok;
   sw.querySelectorAll("[data-view-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.viewMode===v)));
   const stoveOk=stoveAllowed();
-  $("#chartsPanel").hidden=!mode||!TOOLS.charts;
-  $("#oddsPanel").hidden=!mode||!TOOLS.odds; $("#stovePanel").hidden=!mode||!TOOLS.stove||!stoveOk;
+  const oddsOk=toolOk("odds"), chartsOk=toolOk("charts");
+  $("#chartsPanel").hidden=!mode||!TOOLS.charts||!chartsOk;
+  $("#oddsPanel").hidden=!mode||!TOOLS.odds||!oddsOk;
+  [["odds",oddsOk],["charts",chartsOk]].forEach(([k,ok])=>{const c=document.querySelector(`[data-tool="${k}"]`); if(c) c.disabled=!ok; const n=$("#"+k+"Note"); if(n) n.textContent=ok?"":" · your teacher has it turned off";}); $("#stovePanel").hidden=!mode||!TOOLS.stove||!stoveOk;
   const notesOk=solverAllowed(); $("#notesPanel").hidden=!mode||TOOLS.notes===false||!notesOk;
   const nc=document.querySelector('[data-tool="notes"]'); if(nc){nc.disabled=!notesOk;} const nn=$("#notesNote"); if(nn) nn.textContent=notesOk?"":" · opens when the solver does";
   const sc=document.querySelector('[data-tool="stove"]'); if(sc) sc.disabled=!stoveOk;
-  const sn=$("#stoveNote"); if(sn){const w=(view()&&view().rules&&view().rules.stoveStudents)||"between"; sn.textContent=stoveOk?"":w==="off"?" · your teacher has it turned off":" · opens between hands";}
+  const sn=$("#stoveNote"); if(sn){const w=(view()&&view().rules&&view().rules.stoveStudents)||"always"; sn.textContent=stoveOk?"":w==="off"?" · your teacher has it turned off":" · opens between hands";}
   $("#toolsWrap").hidden=!mode;
   document.querySelectorAll("[data-tool]").forEach(x=>{x.checked=x.dataset.tool==="notes"?TOOLS.notes!==false:!!TOOLS[x.dataset.tool]});
   const dv=mode&&v!=="table"?v:null;
@@ -255,10 +272,12 @@ async function createLobby(){
   if(code.replace(/\s/g,"").length<4){homeErr("The teacher code needs at least 4 letters or numbers.");$("#newCode").focus();return}
   const btn=$("#createBtn"); btn.disabled=true;
   try{
-    const r=await fetch("/api/lobbies",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name,code,key:$("#newKey").value||undefined})});
+    const pw=($("#newPw").value||"").trim();
+    if(pw&&pw.length<3){homeErr("The student password needs at least 3 characters, or leave it blank.");$("#newPw").focus();return}
+    const r=await fetch("/api/lobbies",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name,code,pw:pw||undefined,key:$("#newKey").value||undefined})});
     const j=await r.json().catch(()=>({}));
     if(!r.ok){if(j.needsKey){needsKey=true;render()}homeErr(j.error||"Couldn't create the lobby.");return}
-    saveCode(j.id,code); $("#newName").value=""; $("#newCode").value=suggestCode();
+    saveCode(j.id,code); $("#newName").value=""; $("#newPw").value=""; $("#newCode").value=suggestCode();
     enterLobby(j.id,"teacher",code);
   }catch(e){homeErr("Couldn't reach the server. Check your connection and try again.")}
   finally{btn.disabled=false}
@@ -431,7 +450,7 @@ function renderAct(P,T){
 /* the Solver panel under the action bar: load a street of this hand into the solver (heads-up only, no hole cards) */
 function renderSolve(P,T){
   const el=$("#solvePanel"); const spots=P.spots||[];
-  const who=(P.rules&&P.rules.solverStudents)||"between", between=P.phase==="idle"||P.phase==="done";
+  const who=(P.rules&&P.rules.solverStudents)||"always", between=P.phase==="idle"||P.phase==="done";
   const allowed=mode==="local"||T||(svOn&&(who==="always"||(who==="between"&&between)));
   if(!allowed||!spots.length){el.hidden=true;setHTML(el,"");return}
   el.hidden=false;
@@ -488,14 +507,14 @@ function renderTeacherSide(){
       <p class="note">When time runs out the player checks if they can, otherwise folds.</p></div>
     <div class="group"><h3>Teaching</h3>
       <div class="row">${revealBtn()}<span class="note">Shows every hand to students, folded ones too. To show just one player's cards, press <b>Show</b> above their seat on the table.</span></div>
-      <div class="fields" style="margin-top:8px"><div class="field" style="grid-column:1/-1"><label for="solverSel">Students can open the solver</label><select id="solverSel" data-rule="solverStudents">${[["off","Never (teachers only)"],["between","Between hands"],["always","Any time, even mid-hand"]].map(([v,l])=>`<option value="${v}"${(r.solverStudents||"between")===v?" selected":""}>${l}</option>`).join("")}</select></div>
-        <div class="field" style="grid-column:1/-1"><label for="stoveSel">Students can use the poker stove</label><select id="stoveSel" data-rule="stoveStudents">${[["off","Never (teachers only)"],["between","Between hands"],["always","Any time, even mid-hand"]].map(([v,l])=>`<option value="${v}"${(r.stoveStudents||"between")===v?" selected":""}>${l}</option>`).join("")}</select></div></div>
+      <h3 class="subh">What students can use</h3><p class="note">Everything is open to students unless you turn it off here.</p>
+      <div class="fields" style="margin-top:4px">${[["solverSel","solverStudents","Solver and shared notes",3],["stoveSel","stoveStudents","Poker stove",3],["oddsSel","oddsStudents","Odds calculator",2],["chartsSel","chartsStudents","Preflop charts (to read)",2]].map(([id,k,l,n])=>`<div class="field" style="grid-column:1/-1"><label for="${id}">${l}</label><select id="${id}" data-rule="${k}">${(n===3?[["always","Any time, even mid-hand"],["between","Only between hands"],["off","Never (teachers only)"]]:[["always","Yes"],["off","No (teachers only)"]]).map(([v,t])=>`<option value="${v}"${(r[k]||"always")===v?" selected":""}>${t}</option>`).join("")}</select></div>`).join("")}</div>
       <label class="toggle"><input type="checkbox" id="keepSetup"${G.keepSetup?" checked":""}><span>Keep my card setup for the next hand<br><span class="note">Replays the same hole cards so students can try other lines. Board cards you set are used once.</span></span></label>
       <div class="row" style="margin-top:8px">${!between()?`<button class="b" type="button" data-cmd="voidhand">Cancel this hand</button>`:""}
       ${confirmReset?`<span class="confirm"><span>Reset table, stacks and log?</span><button class="b sm warn" type="button" data-cmd="reset">Reset</button><button class="b sm" type="button" data-cmd="noreset">Keep</button></span>`:`<button class="b warn" type="button" data-cmd="askreset">Reset table…</button>`}</div></div></div>`;
   } else {
-    h+=dcGroup()+`<div class="students" id="stuList"></div>
-      ${local?"":`<p class="note">Students open <b>${esc(location.host)}/play</b>, pick <b>${esc(G.lname||L.name)}</b> from the lobby list, and tap an open seat. Or send them this link: <b>${esc(location.origin)}/play/#lobby-${esc(L.id)}</b>. Co-teachers join with the teacher code; you'll see each other's pointers, and a colored outline marks whatever another teacher is editing.</p>`}`;
+    h+=lockGroup()+dcGroup()+`<div class="students" id="stuList"></div>
+      ${local?"":L.discord?`<p class="note">This table belongs to a Discord call. People can also join from a web browser, outside Discord, with this link: <b class="sel">${esc(SITE)}/play/#lobby-${esc(L.id)}</b>${L.locked?" (they'll need the password)":""}. To run it from your own browser instead, press <b>Open in browser</b> at the top; you stay the teacher there.`:`<p class="note">Students open <b>${esc(location.host)}/play</b>, pick <b>${esc(G.lname||L.name)}</b> from the lobby list, and tap an open seat. Or send them this link: <b>${esc(location.origin)}/play/#lobby-${esc(L.id)}</b>. Co-teachers join with the teacher code; you'll see each other's pointers, and a colored outline marks whatever another teacher is editing.</p>`}`;
   }
   h+=`</div>`;
   setSide(h); renderPeople();
@@ -513,6 +532,15 @@ function renderPeople(){
 }
 /* ---------- Discord: post "the table is open" to the group's channel (teachers) ---------- */
 let DCS=null, dcNote=null, dcUrl="", dcMsg="", dcBusy=false;
+// teachers: lock the lobby with a student password, or open it again
+let lockDraft="";
+function lockGroup(){
+  if(mode!=="lobby"||!isT()||!L||L.discord) return "";
+  return `<div class="group lockgrp"><h3>${L.locked?"🔒 Password":"Lobby access"}</h3>
+    <p class="note">${L.locked?"Students need the password to join. Teachers use the teacher code.":"Anyone with the lobby link or code can join as a student."}</p>
+    <div class="row dcrow"><input type="text" id="lockIn" maxlength="40" autocomplete="off" placeholder="${L.locked?"New password":"Set a password"}" value="${esc(lockDraft)}" aria-label="Student password"><button class="b sm" type="button" id="lockGo" data-cmd="lockgo">${L.locked?"Change":"Lock with password"}</button>${L.locked?`<button class="b sm" type="button" id="lockOff" data-cmd="lockoff">Remove password</button>`:""}</div>
+    <p class="note">Changing it doesn't remove anyone already here.</p></div>`;
+}
 function dcGroup(){
   if(mode!=="lobby"||!isT()||!DCS) return "";
   const note=dcNote&&Date.now()-dcNote.at<20000?(dcNote.err?`<p class="err" role="status">${esc(dcNote.err)}</p>`:`<p class="note dcok" role="status">${esc(dcNote.ok)}</p>`):"";
@@ -546,12 +574,13 @@ function renderHome(){
   if(homeList==null) h=`<p class="note">${homeListErr?"Can't reach the server right now. Retrying…":"Loading lobbies…"}</p>`;
   else h=live.length?live.map(l=>{const id=esc(l.id); const mine=!!codes()[l.id];
     return `<div class="lob${l.live?" live":""}"><div><div class="ttl">${esc(String(l.name||"Lobby").slice(0,28))}</div>
-      <div class="meta"><span class="dot ${l.live?"on":""}" style="display:inline-block;margin-right:5px"></span>${l.live?"Teacher here":"No teacher right now"} · code ${esc(String(l.id).toUpperCase())} · ${esc(String(l.stakes||"").slice(0,16))} · ${+l.seated||0}/${+l.size||0} seated${l.hand?` · hand #${+l.hand}`:""}</div></div>
+      <div class="meta"><span class="dot ${l.live?"on":""}" style="display:inline-block;margin-right:5px"></span>${l.locked?"🔒 Password · ":""}${l.live?"Teacher here":"No teacher right now"} · code ${esc(String(l.id).toUpperCase())} · ${esc(String(l.stakes||"").slice(0,16))} · ${+l.seated||0}/${+l.size||0} seated${l.hand?` · hand #${+l.hand}`:""}</div></div>
       <div class="row">${mine?`<button class="b sm primary" type="button" data-rejoin="${id}">Rejoin as teacher</button><button class="b sm" type="button" data-join="${id}">Join as student</button><button class="b sm" type="button" data-teach="${id}">Manage</button>`:`<button class="b sm primary" type="button" data-join="${id}">Join as student</button><button class="b sm" type="button" data-teach="${id}">Teach</button>`}</div></div>`}).join("")
     :`<p class="note">No lobbies yet. Start one below.</p>`;
   setHTML($("#dirList"),h);
   $("#keyField").hidden=!needsKey;
   const tf=$("#teachForm"); tf.hidden=!teachFor;
+  $("#pwForm").hidden=!pwFor; if(pwFor) $("#pwName").textContent=pwFor.name||String(pwFor.id).toUpperCase();
   if(teachFor){$("#teachName").textContent=teachFor.name;
     setHTML($("#delRow"),delConfirm?`<span class="confirm"><span>Delete this lobby for everyone? This can't be undone.</span><button class="b sm warn" type="button" id="delGo">Delete</button><button class="b sm" type="button" id="delNo">Keep</button></span>`:`<button class="b sm warn" type="button" id="delAsk">Delete this lobby…</button>`)}
   $("#homeMsg").textContent=homeMsg;
@@ -561,6 +590,7 @@ let flashT=null;
 function flash(t){setConn(true,t);clearTimeout(flashT);flashT=setTimeout(updateConn,3500)}
 function setConn(ok,t){$("#connDot").className="dot "+(ok?"on":"off");$("#connTxt").textContent=t}
 function updateConn(){
+  const dco=$("#dcOpen"); if(dco) dco.hidden=!(IN_DISCORD&&mode==="lobby"&&L);
   if(!mode){setConn(!homeListErr,homeListErr?"Can't reach the server":"Online");return}
   if(mode==="local"){setConn(true,"Practice · this device only");return}
   if(!wsOpen){setConn(false,retry?"Reconnecting…":"Connecting…");return}
@@ -665,7 +695,11 @@ document.addEventListener("click",e=>{
   if(!mode){
     if(t.id==="practiceBtn"){enterLocal();return}
     if(t.id==="createBtn"){createLobby();return}
-    if(t.dataset.join){enterLobby(t.dataset.join,"student");return}
+    if(t.dataset.join){const id=t.dataset.join,l=(homeList||[]).find(x=>x.id===id);
+      if(l&&l.locked&&!pws()[id]){pwFor={id,name:l.name};teachFor=null;homeErr("");render();setTimeout(()=>{const i=$("#pwIn");if(i) i.focus()},50);return}
+      enterLobby(id,"student");return}
+    if(t.id==="pwGo"&&pwFor){const v=$("#pwIn").value.trim();if(!v){homeErr("Enter the password.");return}savePw(pwFor.id,v);const id=pwFor.id;pwFor=null;$("#pwIn").value="";enterLobby(id,"student");return}
+    if(t.id==="pwNo"){pwFor=null;homeErr("");render();return}
     if(t.dataset.rejoin){const c=codes()[t.dataset.rejoin];if(c) enterLobby(t.dataset.rejoin,"teacher",c); else {teachFor={id:t.dataset.rejoin,name:t.dataset.rejoin};render()}return}
     if(t.dataset.teach){const l=(homeList||[]).find(x=>x.id===t.dataset.teach);teachFor={id:t.dataset.teach,name:l?l.name:t.dataset.teach};delConfirm=false;$("#teachCode").value=codes()[teachFor.id]||"";render();$("#teachCode").focus();return}
     if(t.id==="teachCancel"){teachFor=null;render();return}
@@ -691,6 +725,8 @@ document.addEventListener("click",e=>{
     if(c==="time"){sendOp({t:"time"});return}
     if(c==="rakereset"){sendOp({t:"rakereset"});return}
     if(c==="dcset"){const u=($("#dcUrl")||{}).value||dcUrl;dcUrl=u;wsSend({t:"dc",op:"set",url:u.trim()});return}
+    if(c==="lockgo"){const v=(($("#lockIn")||{}).value||lockDraft).trim();if(v.length<3){flash("The password needs at least 3 characters.");return}wsSend({t:"lockpw",pw:v});lockDraft="";return}
+    if(c==="lockoff"){wsSend({t:"lockpw",pw:""});return}
     if(c==="dcclear"){wsSend({t:"dc",op:"clear"});dcNote=null;return}
     if(c==="dcpost"){const here=!!($("#dcHere")||{}).checked;dcBusy=true;render();setTimeout(()=>{dcBusy=false;render()},4000);wsSend({t:"dc",op:"post",msg:dcMsg,here});return}
     if(c==="askreset"){confirmReset=true;render();return}
@@ -712,6 +748,7 @@ document.addEventListener("input",e=>{
   else if(t.id==="homeName"){myName=t.value.slice(0,16);lsSet("hsp-name",myName)}
   else if(t.dataset.pin){pollInput(t)}
   else if(t.id==="dcUrl"){dcUrl=t.value}
+  else if(t.id==="lockIn"){lockDraft=t.value}
   else if(t.id==="dcMsg"){dcMsg=t.value}
 });
 document.addEventListener("change",e=>{
@@ -734,6 +771,8 @@ document.addEventListener("keydown",e=>{
   if(id==="amtNum"){e.preventDefault();doAct("raise")}
   else if(id==="newName"||id==="newCode"||id==="newKey"){e.preventDefault();createLobby()}
   else if(id==="teachCode"&&teachFor){e.preventDefault();$("#teachGo").click()}
+  else if(id==="homeName"&&pendingHash){e.preventDefault();myName=($("#homeName").value||"").trim().slice(0,16);if(myName){pendingHash=false;openFromHash()}}
+  else if(id==="pwIn"&&pwFor){e.preventDefault();$("#pwGo").click()}
   else if(e.target.matches&&e.target.matches("#side input[type=text],#side input[type=number]")) e.target.blur();
 });
 function doAct(type){
@@ -746,20 +785,27 @@ function doAct(type){
 
 /* ---------- start ---------- */
 function openFromHash(){
-  const m=/^lobby-([a-z0-9]{3,12})$/i.exec((location.hash||"").slice(1)); if(!m||mode) return;
-  const id=m[1].toLowerCase(), code=codes()[id];
-  if(!myName){homeErr("Enter your name, then join the lobby from the list.");$("#homeName").focus();return}
+  // #lobby-ID, or #lobby-ID/t-CODE when a teacher moves a table from Discord to their browser
+  const m=/^lobby-([a-z0-9]{3,12})(?:\/t-(.{4,120}))?$/i.exec((location.hash||"").slice(1)); if(!m||mode) return;
+  const id=m[1].toLowerCase();
+  if(m[2]){try{saveCode(id,decodeURIComponent(m[2]))}catch(e){} history.replaceState(null,"","#lobby-"+id)}
+  const code=codes()[id];
+  if(!myName){homeErr("Enter your name above and press Enter to join.");pendingHash=true;$("#homeName").focus();return}
   if(code) enterLobby(id,"teacher",code); else enterLobby(id,"student");
 }
 window.addEventListener("hashchange",()=>{if(!mode&&!new URLSearchParams(location.search).has("frame_id")) openFromHash()});
 $("#homeName").value=myName; $("#newCode").value=suggestCode();
 updateConn(); render();
 // inside a Discord voice channel (an Activity): sign in with Discord and go straight to this call's table
-const IN_DISCORD=new URLSearchParams(location.search).has("frame_id");
+$("#dcOpen").onclick=()=>{ if(!L) return;
+  const url=`${SITE}/play/#lobby-${L.id}${ROLE==="teacher"&&TCODE?"/t-"+encodeURIComponent(TCODE):""}`;
+  if(DSDK) DSDK.openLink(url); else window.open(url,"_blank","noopener");
+  flash(ROLE==="teacher"?"Opening your browser: you'll be the teacher there too":"Opening your browser");
+};
 if(IN_DISCORD){
   document.body.classList.add("in-discord");
   homeErr("Connecting to Discord…");
-  import("./discord.js").then(m=>m.startDiscord(t=>homeErr(t))).then(j=>{
+  import("./discord.js").then(m=>{DSDK=m;return m.startDiscord(t=>homeErr(t))}).then(j=>{
     homeErr(""); myName=j.name; $("#homeName").value=j.name; lsSet("hsp-name",myName);
     if(j.role==="teacher"&&j.code) saveCode(j.id,j.code);
     enterLobby(j.id,j.role,j.code);
