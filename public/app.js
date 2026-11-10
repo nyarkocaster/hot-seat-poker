@@ -1,7 +1,7 @@
 // Hot Seat Poker page: lobby list, table, teacher controls, live connection to the lobby server.
 import {createEngine,freshGame,RANKS,SYM,STREETS,money,pretty} from "./engine.js";
 import {createSolver} from "./solver/core.js";
-import {createDock} from "./dock.js";
+import {createDock,solverPalette,notesPalette} from "./dock.js";
 import {createNotes} from "./notes.js";
 import {createOdds,createStove} from "./tools.js";
 
@@ -67,8 +67,8 @@ function onMsg(m){
 const TOOLS=lsGet("hsp-tools")||{};
 function setTool(k,on){
   TOOLS[k]=!!on; lsSet("hsp-tools",TOOLS); render();
-  if(on){const P=view(); if(k==="odds"&&ODDS){ODDS.refresh();} if(k==="stove"&&STOVE&&P&&["preflop","flop","turn","river"].includes(P.phase)&&STOVE.rows.every(r=>!r.text)) STOVE.fromTable();
-    const el=$(k==="odds"?"#oddsPanel":"#stovePanel"); setTimeout(()=>{const w=el.closest(".dk")||el; w.scrollIntoView({behavior:"smooth",block:"nearest"})},60)}
+  if(on){const P=view(); if(k==="odds"&&ODDS){ODDS.refresh();} if(k==="notes"&&NB){NB.refresh();} if(k==="stove"&&STOVE&&P&&["preflop","flop","turn","river"].includes(P.phase)&&STOVE.rows.every(r=>!r.text)) STOVE.fromTable();
+    const el=$(k==="odds"?"#oddsPanel":k==="notes"?"#notesPanel":"#stovePanel"); setTimeout(()=>{const w=el.closest(".dk")||el; w.scrollIntoView({behavior:"smooth",block:"nearest"})},60)}
 }
 
 /* ---------- polls: the teacher asks, everyone answers privately, then the answers are shown ---------- */
@@ -151,9 +151,9 @@ function renderPoll(force){
 
 /* ---------- the solver, in this window ---------- */
 let SV=null, NB=null, ODDS=null, STOVE=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
-const DOCK=createDock($("#duo"));
+const DOCK=createDock($("#duo")), SVPAL=solverPalette($("#svPal")); let NBPAL=null;
 function unmountSolver(){
-  DOCK.release();
+  DOCK.release(); SVPAL.release(); if(NBPAL) NBPAL.release(); NBPAL=null;
   if(SV) SV.destroy(); if(NB) NB.destroy(); if(STOVE) STOVE.destroy(); SV=null; NB=null; ODDS=null; STOVE=null;
   $("#solverRoot").innerHTML=""; $("#notesPanel").innerHTML=""; $("#oddsPanel").innerHTML=""; $("#stovePanel").innerHTML="";
   POLL=null; pollDraft=null; pollPick=null;
@@ -167,6 +167,7 @@ function mountSolver(){
   ODDS=createOdds($("#oddsPanel"),{table:tbl});
   STOVE=createStove($("#stovePanel"),{table:tbl,solver:()=>solverAllowed()?SV:null,odds:()=>TOOLS.odds?ODDS:null,flash});
   NB=createNotes($("#notesPanel"),{transport:mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},canEdit:()=>isT()||svOn}:null,table:{current:()=>view()},solver:()=>SV,flash});
+  NBPAL=notesPalette(NB.body,NB.foot); NBPAL.set("main");
   svOn=mode==="local";
 }
 const solverAllowed=()=>!!mode&&(isT()||svOn);
@@ -185,11 +186,14 @@ function applyView(){
   sw.querySelectorAll("[data-view-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.viewMode===v)));
   const stoveOk=stoveAllowed();
   $("#oddsPanel").hidden=!mode||!TOOLS.odds; $("#stovePanel").hidden=!mode||!TOOLS.stove||!stoveOk;
+  const notesOk=solverAllowed(); $("#notesPanel").hidden=!mode||TOOLS.notes===false||!notesOk;
+  const nc=document.querySelector('[data-tool="notes"]'); if(nc){nc.disabled=!notesOk;} const nn=$("#notesNote"); if(nn) nn.textContent=notesOk?"":" · opens when the solver does";
   const sc=document.querySelector('[data-tool="stove"]'); if(sc) sc.disabled=!stoveOk;
   const sn=$("#stoveNote"); if(sn){const w=(view()&&view().rules&&view().rules.stoveStudents)||"between"; sn.textContent=stoveOk?"":w==="off"?" · your teacher has it turned off":" · opens between hands";}
   $("#toolsWrap").hidden=!mode;
-  document.querySelectorAll("[data-tool]").forEach(x=>{x.checked=!!TOOLS[x.dataset.tool]});
-  DOCK.set(mode&&v!=="table"?v:null);
+  document.querySelectorAll("[data-tool]").forEach(x=>{x.checked=x.dataset.tool==="notes"?TOOLS.notes!==false:!!TOOLS[x.dataset.tool]});
+  const dv=mode&&v!=="table"?v:null;
+  if(dv){SVPAL.set("main");$("#svPal").hidden=false;DOCK.set(dv)}else{DOCK.set(null);SVPAL.set(null);$("#svPal").hidden=true}
   $("#dockReset").hidden=!DOCK.view;
 }
 
@@ -630,7 +634,7 @@ document.addEventListener("click",e=>{
     else if(t.dataset.pk==="done"){closePicker()}
     return;
   }
-  if(t.id==="dockReset"){DOCK.reset();render();return}
+  if(t.id==="dockReset"){DOCK.reset();SVPAL.reset();if(NBPAL) NBPAL.reset();render();return}
   if(t.id==="themeBtn"){const nt=document.documentElement.dataset.theme==="light"?"dark":"light";document.documentElement.dataset.theme=nt;try{localStorage.setItem("hsp-theme",nt)}catch(x){}render();return}
   if(t.id==="leaveBtn"){leaveLobby();return}
   if(!mode){
