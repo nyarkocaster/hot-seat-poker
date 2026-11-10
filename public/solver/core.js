@@ -6,7 +6,8 @@
 // - Linked to a table hand, it follows the table's cards and bets, and a teacher picking the next card
 //   in the solver sets that card on the table.
 // Card ids follow the engine: id = 4 * rank + suit (rank 0 = deuce .. 12 = ace; suits c, d, h, s).
-import { cellName, cellCombos, parseRange, formatRange, comboCount, PRESETS } from "./range.js";
+import { cellName, cellCombos, parseRange, formatRange, comboCount, PRESETS, presetOptions } from "./range.js";
+import { classify, MADE, DRAWS } from "./classify.js";
 
 const RANKS = "23456789TJQKA", SUITS = "cdhs", SYM = { s: "♠", h: "♥", d: "♦", c: "♣" };
 const APP_PORT = 47123;
@@ -34,6 +35,9 @@ export const TREES = {
   detailed: ["33%, 75%", "3x", "66%, 125%", "3x", "50%, 100%, 150%", "3x"],
 };
 const SIZE_KEYS = ["fb", "fr", "tb", "tr", "rb", "rr"];
+// flops for reports: the first 12 cover the main kinds of flop; all 25 fill in more
+const REPORT_FLOPS = ["As7d2c", "Kh8s3d", "Qh9d4c", "Jd7s2h", "9s6d3c", "7h5c2d", "KsKd6c", "8h8c3s", "KdQs9c", "8d7d5s", "Qd6d2d", "Ad5d3c",
+  "AhKd4s", "Ad9s8s", "Kc7c4c", "QsJh8d", "JcTc6h", "Th9h7d", "6s5s4d", "5h3c2d", "Ac9h9d", "7s6s2s", "Th4h4s", "JsTd9c", "Kh9s5h"];
 const BROWSER_LIMIT = 3.8e9;
 
 /* ---------- engines: the browser (Web Worker + WebAssembly) or the solver app (localhost) ---------- */
@@ -137,7 +141,7 @@ export function normalizeSpot(sp) {
 }
 export function defaultShared() {
   return { spot: defaultSpot(), link: null, sync: true, status: "idle", host: null, hostName: "", where: "", threads: 0,
-    prog: null, info: null, cards: null, solved: null, path: [{ hist: [], label: "Start" }], solveId: null, err: "", mem: 0, locks: [], base: null };
+    prog: null, info: null, cards: null, solved: null, path: [{ hist: [], label: "Start" }], solveId: null, err: "", mem: 0, locks: [], base: null, report: null };
 }
 
 /* A spot recorded by the table (engine noteSpot) turned into solver setup. The solver plays two
@@ -176,7 +180,7 @@ export function createSolver(root, opt = {}) {
   const T = opt.transport || null, TB = opt.table || null, shared = !!T;
   const me = () => (shared ? T.peer() : "me");
   let sv = defaultShared();
-  let tab = 0, paintW = 1, deckOpen = false, explore = false, myPath = null, selCell = null, view = "strat";
+  let tab = 0, paintW = 1, deckOpen = false, drill = null, brkFilter = null, brkCache = { key: "", cls: null }, explore = false, myPath = null, selCell = null, view = "strat";
   let engine = null, engineSolveId = null, appTried = false, bigMsg = null, localErr = "", viewPinned = false;
   const cache = new Map(), pending = new Map();
   let tablePath = null, tableKey = "", node = null, nodeKey = "", gen = 0;
@@ -212,7 +216,7 @@ export function createSolver(root, opt = {}) {
         <div class="rlay-c">
         <div class="fields">
           <div class="field"><label for="sv-who">Player</label><input type="text" id="sv-who" maxlength="24"></div>
-          <div class="field"><label for="sv-preset">Load a starting range</label><select id="sv-preset"><option value="">Choose…</option>${Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join("")}</select></div>
+          <div class="field"><label for="sv-preset">Load a starting range</label><select id="sv-preset"><option value="">Choose…</option>${presetOptions()}</select></div>
         </div>
         <div class="row paint"><label for="sv-paintW">Tap paints</label><input type="range" id="sv-paintW" min="0" max="100" step="5" value="100"><span id="sv-paintTxt">100%</span>
           <button class="b sm" type="button" id="sv-clearR">Clear</button></div>
@@ -248,6 +252,16 @@ export function createSolver(root, opt = {}) {
         <div class="engline note" id="sv-eng"></div>
         <div class="locklist" id="sv-lockList"></div>
       </div>
+      <div class="panel" id="sv-pRep"${anc("svrep")}>
+        <h2>Flop report</h2>
+        <p class="note">Solves this spot on a set of flops, one after another, and shows how each player plays each kind of flop. It uses the ranges, pot, stack and bet sizes set up above; only the board changes.</p>
+        <div class="fields">
+          <div class="field"><label for="sv-repSet">Flops</label><select id="sv-repSet"><option value="12">12 flops</option><option value="25">25 flops</option></select></div>
+          <div class="field"><label for="sv-repAcc">Accuracy</label><select id="sv-repAcc"><option value="2">Rough (2% of pot)</option><option value="1" selected>Normal (1%)</option></select></div>
+        </div>
+        <div class="row"><button class="b" type="button" id="sv-repGo">Run the report</button><button class="b" type="button" id="sv-repStop" hidden>Stop</button></div>
+        <div id="sv-repOut"></div>
+      </div>
     </section>
     <section class="main sv-results">
       <div class="panel" id="sv-pRes"${anc("svres")}>
@@ -257,13 +271,15 @@ export function createSolver(root, opt = {}) {
           <div class="path" id="sv-path"></div>
           <div class="nodehead" id="sv-nodeHead"></div>
           <div class="acts" id="sv-acts"${anc("svacts")}></div>
+          <div class="drill" id="sv-drill"${anc("svdrill")}></div>
           <div class="lockbar" id="sv-lockBar"></div>
           <div class="locked" id="sv-lockEd"${anc("svlock")} hidden></div>
           <div class="lockcmp" id="sv-lockCmp"></div>
           <div class="rlay reslay">
           <div class="rlay-g"><div class="rgrid res" id="sv-sgrid"${anc("svgrid")}></div>
           <div class="legend" id="sv-legend"></div></div>
-          <div class="rlay-c"><div class="detail" id="sv-detail"></div>
+          <div class="rlay-c"><details class="brkd" id="sv-brkD" open><summary>Range breakdown</summary><div id="sv-brk"${anc("svbrk")}></div></details>
+          <div class="detail" id="sv-detail"></div>
           <details class="eqgd" id="sv-eqgD" open><summary>Equity graph</summary><div id="sv-eqg"${anc("sveqg")}></div></details></div>
           </div>
         </div>
@@ -278,6 +294,8 @@ export function createSolver(root, opt = {}) {
   const parts = [$("bar"), ...root.querySelectorAll(".panel")];
   const ac = new AbortController();
   const msg = t => { $("msg").innerHTML = t || ""; };
+  // the teacher's preflop charts changed: refresh the list
+  addEventListener("hsp-charts", () => { const s = $("preset"); s.innerHTML = `<option value="">Choose…</option>${presetOptions()}`; }, { signal: ac.signal });
 
   /* ---------- shared state ---------- */
   function patch(o, quiet) {
@@ -488,6 +506,119 @@ export function createSolver(root, opt = {}) {
   $("solve").onclick = () => solve();
   $("stop").onclick = () => { if (engine && sv.host === me()) { engine.stop(); $("stop").disabled = true; } };
 
+  /* ---------- flop report: the same spot solved on many flops ---------- */
+  let repStop = false, repSort = { k: "board", d: 1 };
+  async function runReport() {
+    if (solving || !canEdit()) return;
+    let base; try { base = readSpot({ ...sv.spot, board: [48, 44, 40] }); } catch (e) { localErr = String(e); render(); return; }
+    const flops = REPORT_FLOPS.slice(0, +$("repSet").value || 12).map(f => f.match(/../g).map(cardId));
+    const acc = +$("repAcc").value || 1, maxIt = 400;
+    localErr = ""; solving = true; repStop = false;
+    const rp = { id: rid(), status: "running", n: flops.length, done: 0, rows: [], acc, t0: Date.now(), names: base.names.slice(), pot: base.pot, eff: base.eff, sizes: [base.fb, base.tb, base.rb].join(" / "), by: shared ? T.name() : "" };
+    // the solver keeps one game at a time: a solve on this computer is replaced by the report
+    if (sv.host === me() && (sv.status === "ready" || sv.status === "solving")) patch({ status: "idle", host: null, solveId: null, cards: null, err: "", report: rp });
+    else patch({ report: rp });
+    engineSolveId = null;
+    try {
+      const eng = await getEngine();
+      for (const board of flops) {
+        if (repStop || !sv.report || sv.report.id !== rp.id) break;
+        const s = await eng.ask({ t: "setup", spot: { ...base, board } }, d => d.t === "setup");
+        if (s.err) throw s.err;
+        const [full, small] = s.mem, compress = eng.kind === "app" ? full > (eng.ram || 8e9) * 0.6 : full > 1.5e9, need = compress ? small : full;
+        if (eng.kind !== "app" && need > BROWSER_LIMIT) throw `These ranges and bet sizes need about ${GB(need)} of memory per flop, more than a browser can use. Use fewer bet sizes, or the free solver app.`;
+        await eng.ask({ t: "solve", compress, target: Math.max(1, base.pot * acc / 100), maxIter: maxIt, locks: [] }, d => d.t === "solved", d => {
+          if (d.t === "progress") { const st = $("repStatus"); if (st) st.dataset.it = d.i; }
+        });
+        if (repStop) break;
+        const n0 = s.cards[0].length, n1 = s.cards[1].length;
+        const read = (n, k) => {
+          const na = String(n.acts || "").split("/").filter(Boolean).length, buf = n.res instanceof Float64Array ? n.res : Float64Array.from(n.res);
+          let o = 3; const take = m => buf.subarray(o, o += m);
+          const w = [take(n0), take(n1)], norm = [take(n0), take(n1)], flag = buf[2];
+          let eq = null, ev = null; if (!flag) { eq = [take(n0), take(n1)]; ev = [take(n0), take(n1)]; take(n0); take(n1); }
+          const nc = k ? n1 : n0, strat = na ? take(na * nc) : null;
+          const avg = (v, j) => { let a = 0, t = 0; for (let i = 0; i < v.length; i++) { a += norm[j][i] * v[i]; t += norm[j][i]; } return t ? a / t : 0; };
+          let tot = 0; for (let i = 0; i < nc; i++) tot += norm[k][i];
+          const f = Array.from({ length: na }, (_, a) => { let x = 0; for (let i = 0; i < nc; i++) x += norm[k][i] * strat[a * nc + i]; return tot ? x / tot : 0; });
+          return { acts: n.acts, f, eq: eq ? [avg(eq[0], 0), avg(eq[1], 1)] : null, ev: ev ? [avg(ev[0], 0), avg(ev[1], 1)] : null };
+        };
+        const root = read(await eng.node([]), 0);
+        let ipc = null;
+        if (/^Check/.test(String(root.acts))) { const n = await eng.node([0]); if (n.p === "ip") ipc = read(n, 1); }
+        rp.rows.push({ b: board, oop: { acts: root.acts, f: root.f.map(x => Math.round(x * 1000) / 1000) }, ip: ipc ? { acts: ipc.acts, f: ipc.f.map(x => Math.round(x * 1000) / 1000) } : null,
+          eq: root.eq ? root.eq.map(x => Math.round(x * 1000) / 1000) : null, ev: root.ev ? root.ev.map(x => Math.round(x)) : null });
+        rp.done = rp.rows.length;
+        patch({ report: { ...rp } });
+      }
+      patch({ report: { ...rp, status: repStop ? "stopped" : "done", secs: Math.round((Date.now() - rp.t0) / 1000) } });
+    } catch (e) {
+      const m = e && e.message ? e.message : String(e || "");
+      patch({ report: { ...rp, status: "error", err: m } });
+      if (engine && engine.kind === "browser" && /memory|unreachable|stopped/i.test(m)) { engine.close(); engine = null; }
+    } finally { solving = false; render(); }
+  }
+  $("repGo").onclick = () => runReport();
+  $("repStop").onclick = () => { if (engine && solving) { repStop = true; engine.stop(); } };
+  function texture(b) {
+    const r = b.map(c => c >> 2).sort((x, y) => y - x), su = new Set(b.map(c => c & 3)).size;
+    const paired = r[0] === r[1] || r[1] === r[2], hi = r[0];
+    const d = [...new Set(r)], conn = d.length === 3 && (d[0] - d[2] <= 4 || (d[0] === 12 && d[1] <= 3));
+    return { hi: hi === 12 ? "Ace-high" : hi === 11 ? "King-high" : hi === 10 ? "Queen-high" : hi >= 8 ? "Jack- or ten-high" : "Nine-high or lower",
+      suits: su === 1 ? "Monotone" : su === 2 ? "Two-tone" : "Rainbow", paired, conn };
+  }
+  const betShare = x => x ? String(x.acts).split("/").filter(Boolean).reduce((a, s2, i) => a + (/^(Bet|Allin)/.test(s2) ? x.f[i] || 0 : 0), 0) : null;
+  function mixBar(x) {
+    if (!x) return `<span class="muted">–</span>`;
+    const L = actionList(x.acts, sv.report.pot);
+    return `<span class="mixbar" title="${esc(L.map((a, i) => `${a.label}: ${pct(x.f[i] || 0)}`).join(" · "))}">${L.map((a, i) => (x.f[i] || 0) > 0.001 ? `<i style="width:${x.f[i] * 100}%;background:${a.color}"></i>` : "").join("")}</span>`;
+  }
+  function renderReport() {
+    const R = sv.report, out = $("repOut"), busy = R && R.status === "running";
+    $("repGo").hidden = busy; $("repStop").hidden = !busy || !(solving && engine);
+    $("repGo").disabled = !canEdit() || solving;
+    if (busy && solving) $("solve").disabled = true;
+    $("repGo").textContent = R && R.rows && R.rows.length ? "Run it again" : "Run the report";
+    if (!R) { setHTML(out, `<p class="note">${sv.host === me() && sv.status === "ready" ? "Running a report replaces the solve on this computer; you can solve it again afterwards. " : ""}A report takes a while: about ${engine && engine.kind === "app" ? "5 to 20 seconds" : "20 to 60 seconds"} per flop with quick bet sizes.</p>`); return; }
+    const n0 = shortName2(R.names, 0), n1 = shortName2(R.names, 1), rows = R.rows || [];
+    let h = "";
+    if (busy) { const per = rows.length ? (Date.now() - R.t0) / rows.length : 0, left = per ? Math.round(per * (R.n - rows.length) / 60000) : null;
+      h += `<p class="note" id="sv-repStatus">Working: flop ${Math.min(rows.length + 1, R.n)} of ${R.n}${left != null ? ` · about ${left < 1 ? "a minute" : left + " min"} left` : ""}${R.by ? ` · on ${esc(R.by)}'s computer` : ""}.</p>`; }
+    else if (R.status === "error") h += `<p class="err">The report stopped: ${esc(R.err)}</p>`;
+    else h += `<p class="note">${R.status === "stopped" ? "Stopped after" : "Done:"} ${rows.length} flop${rows.length === 1 ? "" : "s"}${R.secs ? ` in ${Math.round(R.secs / 60) || "under 1"} min` : ""} · ${esc(R.names.join(" vs "))} · pot ${usd(R.pot)}, stacks ${usd(R.eff)} · bets ${esc(R.sizes)} · within ${R.acc}% of the pot.</p>`;
+    if (!rows.length) { setHTML(out, h); return; }
+    // by kind of flop
+    const groups = new Map(), add = (g, r) => { if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); };
+    rows.forEach(r => { const t = texture(r.b); add(t.hi, r); add(t.suits, r); if (t.paired) add("Paired", r); if (t.conn) add("Connected", r); add("All flops", r); });
+    const mean = (l, fn) => { const v = l.map(fn).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    const order = ["All flops", "Ace-high", "King-high", "Queen-high", "Jack- or ten-high", "Nine-high or lower", "Paired", "Connected", "Monotone", "Two-tone", "Rainbow"];
+    h += `<h3 class="repsub">By kind of flop</h3><table class="brk rep"><tr><th></th><th>Flops</th><th>${esc(n0)} equity</th><th>${esc(n0)} bets</th><th>${esc(n1)} bets after a check</th></tr>` +
+      order.filter(g => groups.has(g)).map(g => { const l = groups.get(g), e = mean(l, r => r.eq && r.eq[0]), b0 = mean(l, r => betShare(r.oop)), b1 = mean(l, r => betShare(r.ip));
+        return `<tr${g === "All flops" ? ' class="tot"' : ""}><td>${g}</td><td>${l.length}</td><td>${e == null ? "–" : pct(e)}</td><td>${b0 == null ? "–" : pct(b0)}</td><td>${b1 == null ? "–" : pct(b1)}</td></tr>`; }).join("") + `</table>`;
+    // each flop
+    const key = { board: r => -Math.max(...r.b.map(c => c >> 2)) * 100 - Math.min(...r.b.map(c => c >> 2)), eq: r => r.eq ? r.eq[0] : 0, b0: r => betShare(r.oop) || 0, b1: r => betShare(r.ip) || 0 }[repSort.k];
+    const sorted = rows.slice().sort((a, b) => (key(a) - key(b)) * repSort.d);
+    const th = (k, l) => `<th><button type="button" class="linkbtn" data-rsort="${k}" aria-label="Sort by ${l}">${l}${repSort.k === k ? (repSort.d > 0 ? " ↑" : " ↓") : ""}</button></th>`;
+    h += `<h3 class="repsub">Each flop</h3><table class="brk rep">${`<tr>${th("board", "Flop")}${th("eq", esc(n0) + " eq.")}${th("b0", esc(n0) + " plays")}${th("b1", esc(n1) + " after a check")}<th></th></tr>`}` +
+      sorted.map(r => `<tr><td class="repb">${r.b.map(c => cardsTxt1(c)).join("")}</td><td>${r.eq ? pct(r.eq[0]) : "–"}</td><td>${mixBar(r.oop)}</td><td>${mixBar(r.ip)}</td><td>${canEdit() ? `<button type="button" class="b sm" data-rstudy="${r.b.join(",")}" title="Put this flop in the setup">Study</button>` : ""}</td></tr>`).join("") + `</table>`;
+    h += `<div class="row"><button class="b sm" type="button" data-rcopy="1">Copy as a table</button><span class="note">Pastes into a spreadsheet. Hover a bar to see each action's share.</span></div>`;
+    setHTML(out, h);
+  }
+  const shortName2 = (names, k) => String((names && names[k]) || (k ? "In position" : "Out of position")).split(" · ")[0];
+  const cardsTxt1 = id => { const s2 = cardStr(id); return `<span class="${s2[1]}">${s2[0] === "T" ? "10" : s2[0]}${SYM[s2[1]]}</span>`; };
+  $("repOut").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b || !sv.report) return;
+    if (b.dataset.rsort) { const k = b.dataset.rsort; repSort = { k, d: repSort.k === k ? -repSort.d : 1 }; renderReport(); }
+    else if (b.dataset.rstudy && canEdit()) { editSpot({ board: b.dataset.rstudy.split(",").map(Number), note: "" }); const w = $("pSpot"); if (w && w.scrollIntoView) w.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+    else if (b.dataset.rcopy) {
+      const R = sv.report, n0 = shortName2(R.names, 0), n1 = shortName2(R.names, 1);
+      const lines = [["Flop", `${n0} equity`, `${n0} bets`, `${n1} bets after a check`, `${n0} actions`, `${n1} actions`].join("\t")].concat(R.rows.map(r => [r.b.map(cardStr).join(""), r.eq ? (r.eq[0] * 100).toFixed(1) : "", ((betShare(r.oop) || 0) * 100).toFixed(1), r.ip ? (betShare(r.ip) * 100).toFixed(1) : "",
+        actionList(r.oop.acts, R.pot).map((a, i) => `${a.label} ${(r.oop.f[i] * 100).toFixed(1)}%`).join("; "), r.ip ? actionList(r.ip.acts, R.pot).map((a, i) => `${a.label} ${(r.ip.f[i] * 100).toFixed(1)}%`).join("; ") : ""].join("\t")));
+      const txt = lines.join("\n");
+      (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => { b.textContent = "Copied"; setTimeout(() => { b.textContent = "Copy as a table"; }, 1500); }, () => { b.textContent = "Couldn't copy"; });
+    }
+  });
+
   /* ---------- reading nodes (from this computer's engine, or from the computer that solved) ---------- */
   function query(hist) {
     const k = sv.solveId + "|" + hist.join(",");
@@ -604,7 +735,7 @@ export function createSolver(root, opt = {}) {
     if (!r.flag) tabs.push(["eq0", shortName(0) + " equity"], ["eq1", shortName(1) + " equity"]);
     setHTML($("legend"), `<div class="tabs" style="width:100%;margin:0">${tabs.map(([v, l]) => `<button class="tab" type="button" data-view="${v}" aria-selected="${view === v}">${esc(l)}</button>`).join("")}</div>` +
       (view === "strat" ? node.actions.map(a => `<span><i style="background:${a.color}"></i>${esc(a.label)}</span>`).join("") : `<span><i style="background:#d1453b"></i>low equity</span><span><i style="background:#e8a33d"></i>middle</span><span><i style="background:#4caf73"></i>high equity</span><span>Fill height = how much of that hand is still in the range</span>`));
-    renderGrid(); renderDetail(); renderEqGraph(); renderLockBar(); renderLockCmp();
+    renderGrid(); renderBreak(); renderDetail(); renderEqGraph(); renderLockBar(); renderLockCmp(); renderDrill();
   }
   function eqColor(x) {
     const a = [209, 69, 59], b = [232, 163, 61], c = [76, 175, 115];
@@ -612,12 +743,113 @@ export function createSolver(root, opt = {}) {
     return `rgb(${p.map((v, i) => Math.round(v + (q[i] - v) * t)).join(",")})`;
   }
   const gridPlayer = () => view === "strat" ? (node.p === "oop" ? 0 : 1) : view === "eq1" ? 1 : 0;
-  function cellStats(k) {
+  function cellStats(k, filt) {
     const cells = Array.from({ length: 169 }, () => ({ hs: [], w: 0, nw: 0 }));
-    const cs = sv.cards[k], r = node.r;
-    for (let i = 0; i < cs.length; i++) { const c = cells[cellOf(cs[i])]; c.hs.push(i); c.w += r.w[k][i]; c.nw += r.norm[k][i]; }
+    const cs = sv.cards[k], r = node.r, cl = filt ? classesAt(k) : null;
+    for (let i = 0; i < cs.length; i++) {
+      if (cl && !inGroup(cl[i], filt)) continue;
+      const c = cells[cellOf(cs[i])]; c.hs.push(i); c.w += r.w[k][i]; c.nw += r.norm[k][i];
+    }
     return cells;
   }
+  /* ---------- drill: a hand from the range, you pick the action, the solver grades it ---------- */
+  function drillDeal() {
+    const k = node.p === "oop" ? 0 : 1, nw = node.r.norm[k];
+    let tot = 0; for (const w of nw) tot += w;
+    let x = Math.random() * tot, i = 0;
+    for (; i < nw.length - 1; i++) { x -= nw[i]; if (x <= 0 && nw[i] > 0) break; }
+    while (i > 0 && !(nw[i] > 0)) i--;
+    drill.k = k; drill.i = i; drill.ans = null;
+  }
+  function renderDrill() {
+    const box = $("drill"), r = node && node.r, ok = node && node.actions.length && r && r.aev;
+    const body = $("resBody");
+    if (!ok) { setHTML(box, ""); body.classList.remove("drilling"); if (drill) drill = null; return; }
+    if (!drill || drill.key !== nodeKey) {
+      if (drill) drill = null;
+      body.classList.remove("drilling");
+      setHTML(box, `<button class="b sm" type="button" data-drill="start" title="Get a random hand from this range and choose what to do; the solver grades it">🎯 Quiz me on this spot</button>`);
+      return;
+    }
+    body.classList.add("drilling");
+    const D = drill, k = D.k, nc = sv.cards[k].length, code = sv.cards[k][D.i], pot = node.potNow;
+    const evs = node.actions.map((_, a) => r.aev[a * nc + D.i]), best = Math.max(...evs);
+    const bd = boardFor(curPath());
+    let h = `<div class="drhead"><b>You're ${esc(nameOf(k))}</b><span class="drhand">${cardHTML(code & 255)}${cardHTML(code >> 8)}</span><span class="muted">on</span><span class="drboard">${bd.map(c => cardHTML(c)).join("")}</span><span class="muted">Pot ${usd(pot)}</span></div>`;
+    if (D.ans == null) {
+      h += `<p class="drq">What do you do?</p><div class="row drbtns">${node.actions.map((a, ai) => `<button class="b" type="button" data-drill="pick" data-a="${ai}" style="border-left:4px solid ${a.color}">${esc(a.label)}</button>`).join("")}</div>`;
+    } else {
+      const a = D.ans, loss = Math.max(0, best - evs[a]), f = r.strat[a * nc + D.i], lp = pot ? loss / pot : 0;
+      const verdict = f >= 0.15 || lp < 0.01 ? ["good", "Solver-approved"] : lp < 0.05 ? ["close", "Close"] : ["miss", "Mistake"];
+      h += `<p class="drv ${verdict[0]}"><b>${verdict[1]}.</b> You chose <b>${esc(node.actions[a].label)}</b>${loss > 0.5 ? `, giving up ${usd(loss)} (${pct(lp)} of the pot) compared with the best play` : ", as good as any play here"}.</p>
+        <table class="brk drt"><tr><th>Action</th><th>Solver plays it</th><th>EV of this hand</th></tr>${node.actions.map((x, ai) => `<tr class="${ai === a ? "on" : ""}"><td><i class="drdot" style="background:${x.color}"></i>${esc(x.label)}</td><td>${pct(r.strat[ai * nc + D.i])}</td><td>${usd(evs[ai])}${Math.abs(evs[ai] - best) < 0.5 ? " ★" : ""}</td></tr>`).join("")}</table>
+        <p class="note">★ = the best EV. When the solver mixes, the plays it uses are close to equal in EV.</p>`;
+    }
+    const sc = D.n ? `${D.n} hand${D.n === 1 ? "" : "s"} · ${D.good} solver-approved · average given up ${usd(D.loss / D.n)} (${pct(D.lossPot / D.n)} of the pot)` : "Your score shows here.";
+    h += `<div class="row drfoot">${D.ans != null ? `<button class="b primary sm" type="button" data-drill="next">Next hand</button>` : ""}<button class="b sm" type="button" data-drill="stop">Stop the quiz</button><span class="note">${sc}</span></div>`;
+    setHTML(box, h);
+  }
+  $("drill").addEventListener("click", e => {
+    const b = e.target.closest("[data-drill]"); if (!b || !node) return;
+    const c = b.dataset.drill;
+    if (c === "start") { drill = { key: nodeKey, n: 0, good: 0, loss: 0, lossPot: 0 }; drillDeal(); }
+    else if (c === "stop") { drill = null; }
+    else if (c === "next") drillDeal();
+    else if (c === "pick" && drill && drill.ans == null) {
+      const a = +b.dataset.a, r = node.r, nc = sv.cards[drill.k].length;
+      const evs = node.actions.map((_, x) => r.aev[x * nc + drill.i]), best = Math.max(...evs), loss = Math.max(0, best - evs[a]), lp = node.potNow ? loss / node.potNow : 0;
+      drill.ans = a; drill.n++; drill.loss += loss; drill.lossPot += lp;
+      if (r.strat[a * nc + drill.i] >= 0.15 || lp < 0.01) drill.good++;
+    }
+    renderDrill();
+  });
+
+  /* ---------- range breakdown: what each range is made of here, and how the player to act plays each part ---------- */
+  function classesAt(k) {
+    const bd = boardFor(curPath()), key = sv.solveId + "|" + bd.join(",");
+    if (brkCache.key !== key) brkCache = { key, cls: [null, null], bd };
+    if (!brkCache.cls[k]) brkCache.cls[k] = sv.cards[k].map(code => classify(code & 255, code >> 8, bd));
+    return brkCache.cls[k];
+  }
+  const inGroup = (c, f) => (f.t === "m" ? c.made === f.i : c.draw === f.i);
+  function renderBreak() {
+    const box = $("brk"), r = node && node.r;
+    if (!r || !r.norm) { $("brkD").hidden = true; return; }
+    $("brkD").hidden = false;
+    const actor = node.actions.length ? (node.p === "oop" ? 0 : 1) : -1;
+    const cls = [classesAt(0), classesAt(1)];
+    const tot = [0, 1].map(k => { let t = 0; for (const w of r.norm[k]) t += w; return t; });
+    const group = (t, n) => Array.from({ length: n }, (_, i) => {
+      const f = { t, i }, share = [0, 1].map(k => { let w = 0; cls[k].forEach((c, j) => { if (inGroup(c, f)) w += r.norm[k][j]; }); return tot[k] ? w / tot[k] : 0; });
+      let mix = null, eq = null;
+      if (actor >= 0) {
+        const nc = sv.cards[actor].length; let w = 0; mix = node.actions.map(() => 0);
+        cls[actor].forEach((c, j) => { if (!inGroup(c, f)) return; const x = r.norm[actor][j]; w += x; node.actions.forEach((a, ai) => { mix[ai] += x * r.strat[ai * nc + j]; }); });
+        mix = w ? mix.map(v => v / w) : null;
+      }
+      const k2 = actor >= 0 ? actor : 0;
+      if (r.eq) { let w = 0, e = 0; cls[k2].forEach((c, j) => { if (!inGroup(c, f)) return; w += r.norm[k2][j]; e += r.norm[k2][j] * r.eq[k2][j]; }); eq = w ? e / w : null; }
+      return { f, share, mix, eq };
+    }).filter(g => g.share[0] > 0.0005 || g.share[1] > 0.0005);
+    const made = group("m", MADE.length), draws = group("d", DRAWS.length);
+    const who = actor >= 0 ? actor : 0;
+    const head = `<tr><th></th><th>${esc(shortName(0))}</th><th>${esc(shortName(1))}</th>${r.eq ? `<th title="Average equity of these hands for ${esc(nameOf(who))}">${esc(shortName(who))} eq.</th>` : ""}${actor >= 0 ? `<th>How ${esc(shortName(actor))} plays them</th>` : ""}</tr>`;
+    const row = (g, name) => {
+      const on = brkFilter && brkFilter.t === g.f.t && brkFilter.i === g.f.i;
+      const bar = g.mix ? `<span class="mixbar" title="${esc(node.actions.map((a, ai) => `${a.label}: ${pct(g.mix[ai])}`).join(" · "))}">${node.actions.map((a, ai) => g.mix[ai] > 0.001 ? `<i style="width:${g.mix[ai] * 100}%;background:${a.color}"></i>` : "").join("")}</span>` : (actor >= 0 ? `<span class="muted">none in range</span>` : "");
+      return `<tr class="${on ? "on" : ""}"><td><button type="button" class="linkbtn" data-brk="${g.f.t}${g.f.i}" aria-pressed="${on}" title="Show only these hands in the chart">${esc(name)}</button></td><td>${g.share[0] > 0.0005 ? pct(g.share[0]) : "–"}</td><td>${g.share[1] > 0.0005 ? pct(g.share[1]) : "–"}</td>${r.eq ? `<td>${g.eq == null ? "–" : pct(g.eq)}</td>` : ""}${actor >= 0 ? `<td>${bar}</td>` : ""}</tr>`;
+    };
+    let h = `<table class="brk">${head}${made.map(g => row(g, MADE[g.f.i])).join("")}`;
+    if (draws.length) h += `<tr class="brksub"><th colspan="${3 + (r.eq ? 1 : 0) + (actor >= 0 ? 1 : 0)}">Draws <span class="muted">(hands weaker than a straight)</span></th></tr>` + draws.map(g => row(g, DRAWS[g.f.i])).join("");
+    h += `</table><p class="note">Share of each player's range here. ${brkFilter ? `The chart shows only <b>${esc(brkFilter.t === "m" ? MADE[brkFilter.i] : DRAWS[brkFilter.i])}</b>. <button type="button" class="linkbtn" data-brk="off">Show all hands</button>` : "Tap a group to show only those hands in the chart."}</p>`;
+    setHTML(box, h);
+  }
+  $("brk").addEventListener("click", e => {
+    const b = e.target.closest("[data-brk]"); if (!b || !node) return;
+    const v = b.dataset.brk, f = v === "off" ? null : { t: v[0], i: +v.slice(1) };
+    brkFilter = f && brkFilter && brkFilter.t === f.t && brkFilter.i === f.i ? null : f;
+    renderGrid(); renderBreak(); renderDetail();
+  });
   // each player's hands at this spot, best to worst: how much of the range has at least this much equity
   function renderEqGraph() {
     const box = $("eqg"), r = node && node.r;
@@ -642,7 +874,7 @@ export function createSolver(root, opt = {}) {
       <p class="note">Each line runs through one player's range at this spot, strongest hand on the left. Read across: at 25% along, a quarter of that range has at least this much equity. A line that stays high has a strong range; a steep drop means a few strong hands and many weak ones.</p>`);
   }
   function renderGrid() {
-    const k = gridPlayer(), cells = cellStats(k), r = node.r, nc = sv.cards[k].length, bd = new Set(boardFor(curPath()));
+    const k = gridPlayer(), cells = cellStats(k, brkFilter), r = node.r, nc = sv.cards[k].length, bd = new Set(boardFor(curPath()));
     let h = "";
     for (let ro = 0; ro < 13; ro++) for (let co = 0; co < 13; co++) {
       const i = ro * 13 + co, c = cells[i];
@@ -1038,7 +1270,7 @@ export function createSolver(root, opt = {}) {
   let raf = 0;
   function render() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; renderNow(); }); }
   function renderNow() {
-    renderBar(); syncInputs(); renderPair(); renderLockList(); renderBoard(); renderRangeGrid(); renderProgress(); renderEngine(); renderBig();
+    renderBar(); syncInputs(); renderPair(); renderLockList(); renderBoard(); renderRangeGrid(); renderProgress(); renderEngine(); renderBig(); renderReport();
     if (sv.status === "ready" && sv.cards && sv.solved) loadNode();
     else { $("resBody").hidden = true; $("resEmpty").hidden = false; node = null; nodeKey = "";
       $("resEmpty").textContent = sv.status === "solving" || sv.status === "setting" ? "Solving… the results show here when it's done." : "Set up a spot and press Solve. The answer shows here: how often each hand should check, bet, call or fold, street by street."; }
