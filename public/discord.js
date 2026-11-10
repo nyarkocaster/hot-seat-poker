@@ -17,7 +17,12 @@ const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => set
 export async function startDiscord(onStep = () => {}) {
   onStep("Loading Discord's toolkit…");
   if (window.__hspDiscordMock) sdk = window.__hspDiscordMock; // tests
-  else { const { DiscordSDK } = await import("./vendor/discord-sdk.js"); sdk = new DiscordSDK(DISCORD_ID); }
+  else {
+    // The SDK sends its first message to document.referrer. Coming from our own front page (which forwards
+    // Discord to /play/), that's this site instead of Discord, and Discord never hears it. Use "any" then.
+    try { if (document.referrer && new URL(document.referrer).origin === location.origin) Object.defineProperty(document, "referrer", { get: () => "", configurable: true }); } catch (e) {}
+    const { DiscordSDK } = await import("./vendor/discord-sdk.js"); sdk = new DiscordSDK(DISCORD_ID);
+  }
   onStep("Waiting for Discord to answer… (step 1 of 4)");
   await withTimeout(sdk.ready(), 20000, "Discord didn't answer the first handshake (step 1). Close the Activity and open it again.");
   onStep("Asking Discord to sign you in… If a Discord window asks to authorize Hot Seat Poker, press Authorize. (step 2 of 4)");
