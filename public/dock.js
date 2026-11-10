@@ -13,7 +13,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch
 // key: storage prefix; opt.sub: a palette inside a window; opt.before: put the palette before this element
 export function createPalette(host, units, defaults, key, opt = {}) {
   const dock = document.createElement("div");
-  dock.className = "pal" + (opt.sub ? " sub" : ""); dock.hidden = true;
+  dock.className = "pal" + (opt.sub ? " nest" : ""); dock.hidden = true;
   if (opt.id) dock.id = opt.id;
   dock.innerHTML = `<div class="dcol" data-col="0"></div><div class="dcol" data-col="1"></div>`;
   if (opt.before && opt.before.parentNode === host) host.insertBefore(dock, opt.before); else host.appendChild(dock);
@@ -51,7 +51,7 @@ export function createPalette(host, units, defaults, key, opt = {}) {
     let w = wraps.get(u.id);
     if (w) return w;
     w = document.createElement("section");
-    w.className = "dk" + (opt.sub ? " sub" : ""); w.dataset.dk = u.id;
+    w.className = "dk" + (opt.sub ? " nest" : ""); w.dataset.dk = u.id;
     w.innerHTML = `<div class="dk-h"><button type="button" class="dk-grip" aria-label="Move the ${u.title} window. Drag, or use the arrow keys." title="Drag to move">⠿</button><span class="dk-t">${u.title}</span>
       <span class="dk-zoom" role="group" aria-label="Size of the ${u.title} window"><button type="button" class="dk-zb" data-z="-1" aria-label="Make ${u.title} smaller" title="Smaller">−</button><button type="button" class="dk-z" data-z="0" title="Back to 100%" aria-label="Reset the size of ${u.title}">100%</button><button type="button" class="dk-zb" data-z="1" aria-label="Make ${u.title} bigger" title="Bigger">+</button></span>
       <button type="button" class="dk-fold" aria-expanded="true" aria-label="Fold the ${u.title} window" title="Fold">▾</button></div><div class="dkb"></div>`;
@@ -208,9 +208,9 @@ export const SOLVER_PARTS = [
   { id: "run", title: "Solve", sel: ["#sv-pRun"] },
   { id: "res", title: "Results", sel: ["#sv-pRes"] },
 ];
-export const solverPalette = host => createPalette(host, SOLVER_PARTS, { main: [["spot", "range", "sizes", "run"], ["res"]] }, "hsp-pal-sv-", { sub: true });
+export const solverPalette = host => createPalette(host, SOLVER_PARTS, { main: [["spot", "sizes", "run"], ["range", "res"]] }, "hsp-pal-sv3-", { sub: true });
 /* inside the Notes window */
 export const notesPalette = (host, before) => createPalette(host, [
   { id: "nbtext", title: "Writing", sel: [() => host.querySelector(".nb-pText")] },
   { id: "nbrange", title: "Range", sel: [() => host.querySelector(".nb-pRange")] },
-], { main: [["nbtext"], ["nbrange"]] }, "hsp-pal-nb-", { sub: true, before });
+], { main: [["nbtext", "nbrange"], []] }, "hsp-pal-nb2-", { sub: true, before });
