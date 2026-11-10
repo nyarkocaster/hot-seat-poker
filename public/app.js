@@ -354,10 +354,14 @@ function renderTable(P,T){
       const cs=s.cards||(mine?MINE.cards:null);
       cards=cs?cs.map(c=>cardHTML(c)).join(""):cardHTML("back")+cardHTML("back");
     }
-    const tag=s.out?"Sitting out":s.folded?(P.reveal&&s.has?"Folded · shown":"Folded"):s.allin?"All-in":s.uid?(T?"Student":(me?"You":"Student")):"";
+    const open=s.has&&s.open&&!P.reveal;
+    const tag0=s.out?"Sitting out":s.folded?(P.reveal&&s.has?"Folded · shown":"Folded"):s.allin?"All-in":s.uid?(T?"Student":(me?"You":"Student")):"";
+    const tag=open?(tag0?tag0+" · ":"")+"Shown to all":tag0;
+    // teachers: show or hide just this player's cards for everyone
+    const eye=T&&mode!=="local"&&s.has&&!s.out&&!P.reveal&&!E.G.seats[i].shown?`<button class="showeye${s.open?" on":""}" type="button" data-open="${i}" aria-pressed="${!!s.open}" aria-label="${s.open?"Hide":"Show"} ${esc(s.name)}'s cards ${s.open?"again":"to everyone"}" title="${s.open?"Hide these cards again":"Show these cards to everyone"}">${s.open?"Hide":"Show"}</button>`:"";
     const showTake=ROLE==="student"&&mySeat<0&&!s.uid;
     h+=`<div class="seat${P.toAct===i?" act":""}${s.folded?" folded":""}${me?" me":""}" data-anc="seat${i}" style="left:${pos.x}%;top:${pos.y}%">
-      <div class="hole">${cards}</div>
+      <div class="hole${open?" openhole":""}">${cards}${eye}</div>
       <div class="plate"><div class="nm">${esc(s.name)}</div><div class="stk">${money(s.stack)}</div>${tag?`<div class="tag">${tag}</div>`:""}
       ${showTake?`<button class="b sm" type="button" data-take="${i}">Take seat ${i+1}</button>`:""}</div></div>`;
     if(s.bet>0){const b=track(pos.t,5.17,4.3,2.64);h+=`<div class="bet" style="left:${b.x}%;top:${b.y}%">${money(s.bet)}</div>`}
@@ -478,7 +482,7 @@ function renderTeacherSide(){
       <div class="fields"><div class="field"><label for="clockSel">Shot clock</label><select id="clockSel" data-rule="clock">${[0,15,20,30,45,60,90,120].map(v=>`<option value="${v}"${(r.clock|0)===v?" selected":""}>${v?v+" seconds":"Off"}</option>`).join("")}</select></div></div>
       <p class="note">When time runs out the player checks if they can, otherwise folds.</p></div>
     <div class="group"><h3>Teaching</h3>
-      <div class="row">${revealBtn()}<span class="note">Shows every hand to students, folded ones too.</span></div>
+      <div class="row">${revealBtn()}<span class="note">Shows every hand to students, folded ones too. To show just one player's cards, press <b>Show</b> above their seat on the table.</span></div>
       <div class="fields" style="margin-top:8px"><div class="field" style="grid-column:1/-1"><label for="solverSel">Students can open the solver</label><select id="solverSel" data-rule="solverStudents">${[["off","Never (teachers only)"],["between","Between hands"],["always","Any time, even mid-hand"]].map(([v,l])=>`<option value="${v}"${(r.solverStudents||"between")===v?" selected":""}>${l}</option>`).join("")}</select></div>
         <div class="field" style="grid-column:1/-1"><label for="stoveSel">Students can use the poker stove</label><select id="stoveSel" data-rule="stoveStudents">${[["off","Never (teachers only)"],["between","Between hands"],["always","Any time, even mid-hand"]].map(([v,l])=>`<option value="${v}"${(r.stoveStudents||"between")===v?" selected":""}>${l}</option>`).join("")}</select></div></div>
       <label class="toggle"><input type="checkbox" id="keepSetup"${G.keepSetup?" checked":""}><span>Keep my card setup for the next hand<br><span class="note">Replays the same hole cards so students can try other lines. Board cards you set are used once.</span></span></label>
@@ -656,6 +660,7 @@ document.addEventListener("click",e=>{
     if(t.dataset.unseat!=null){sendOp({t:"unseat",i:+t.dataset.unseat});return}
     if(t.dataset.out!=null){const i=+t.dataset.out;sendOp({t:"out",i,v:!S(i).out});return}
     if(t.dataset.btn!=null){sendOp({t:"btn",i:+t.dataset.btn});return}
+    if(t.dataset.open!=null){const i=+t.dataset.open;sendOp({t:"open",i,v:!S(i).open});return}
     const c=t.dataset.cmd;
     if(c==="deal"){if(E.readyCount()<2){flash("Need at least two seated players with chips.");return}sendOp({t:"deal"});return}
     if(c==="undo"){sendOp({t:"undo"});return}
