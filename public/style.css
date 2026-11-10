@@ -385,3 +385,31 @@ body.dragging .dcol{outline:2px dashed var(--line);outline-offset:5px}
 .eqgl{stroke:var(--line);stroke-width:1}
 .eqgk{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;margin-top:6px}
 .eqgk i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+/* node locking */
+.lockbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
+.lockbar:empty{display:none}
+.lockchip{font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--muted)}
+.lockchip.on{border-color:var(--brass);color:var(--ink);background:color-mix(in srgb,var(--brass) 16%,transparent)}
+.locked{border:1px solid var(--brass);border-radius:10px;padding:10px 12px;margin:8px 0;display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--brass) 6%,transparent)}
+.lkhead{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.lktabs{margin:0}
+.lkbrush{gap:5px;flex-wrap:wrap}
+.lkbrush .b{display:inline-flex;align-items:center;gap:6px}
+.lkbrush .b.on{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass) inset}
+.lkbrush i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.lkbrush i.free{background:var(--line)}
+.lkbrush small{color:var(--muted);font-size:11px}
+.lkgrid{max-width:420px;touch-action:none}
+.lkgrid .rc{font-size:clamp(8px,2.2cqw,11px);cursor:crosshair}
+.lkgrid .rc.out{opacity:.35}
+.lkfill{gap:5px;flex-wrap:wrap}
+.lkmix{display:flex;flex-direction:column;gap:6px}
+.lkmix label{display:grid;grid-template-columns:minmax(120px,1fr) minmax(0,2fr) 64px auto;gap:8px;align-items:center;font-size:13px}
+.lkmix i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+.lockcmp:empty{display:none}
+.lockcmp .cmp{display:flex;flex-direction:column;gap:3px;font-size:13px;border-left:3px solid var(--brass);padding:6px 10px;margin:6px 0;background:var(--panel)}
+.lockcmp .up{color:var(--ok)}.lockcmp .down{color:var(--danger)}
+.locklist:empty{display:none}
+.locklist{border-top:1px solid var(--line);margin-top:10px;padding-top:8px;display:flex;flex-direction:column;gap:6px}
+.locklist h3{margin:0;font-size:13.5px}
+.lockrow{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:12.5px}
