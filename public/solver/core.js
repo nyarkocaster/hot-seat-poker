@@ -80,7 +80,7 @@ class AppEngine extends Engine {
       ws.onopen = () => ws.send(JSON.stringify({ t: "load" }));
       ws.onmessage = e => {
         let d; try { d = JSON.parse(e.data); } catch (x) { return; }
-        if (d.t === "loaded" && !this.ready) { this.ready = true; clearTimeout(to); this.threads = d.threads; this.ram = d.ram; resolve(); return; }
+        if (d.t === "loaded" && !this.ready) { this.ready = true; clearTimeout(to); this.threads = d.threads; this.ram = d.ram; this.version = d.version || "1.0.0"; resolve(); return; }
         this._onmsg(d);
       };
       ws.onclose = () => {
@@ -137,7 +137,7 @@ export function normalizeSpot(sp) {
 }
 export function defaultShared() {
   return { spot: defaultSpot(), link: null, sync: true, status: "idle", host: null, hostName: "", where: "", threads: 0,
-    prog: null, info: null, cards: null, solved: null, path: [{ hist: [], label: "Start" }], solveId: null, err: "", mem: 0 };
+    prog: null, info: null, cards: null, solved: null, path: [{ hist: [], label: "Start" }], solveId: null, err: "", mem: 0, locks: [], base: null };
 }
 
 /* A spot recorded by the table (engine noteSpot) turned into solver setup. The solver plays two
@@ -242,6 +242,7 @@ export function createSolver(root, opt = {}) {
         <div class="prog" id="sv-prog" hidden><div class="bar"><span id="sv-progBar"></span></div><p class="note" id="sv-progTxt"></p></div>
         <div class="err" id="sv-msg" role="status"></div>
         <div class="engline note" id="sv-eng"></div>
+        <div class="locklist" id="sv-lockList"></div>
       </div>
     </section>
     <section class="main sv-results">
@@ -252,6 +253,9 @@ export function createSolver(root, opt = {}) {
           <div class="path" id="sv-path"></div>
           <div class="nodehead" id="sv-nodeHead"></div>
           <div class="acts" id="sv-acts"${anc("svacts")}></div>
+          <div class="lockbar" id="sv-lockBar"></div>
+          <div class="locked" id="sv-lockEd"${anc("svlock")} hidden></div>
+          <div class="lockcmp" id="sv-lockCmp"></div>
           <div class="rgrid res" id="sv-sgrid"${anc("svgrid")}></div>
           <div class="legend" id="sv-legend"></div>
           <div class="detail" id="sv-detail"></div>
@@ -442,10 +446,15 @@ export function createSolver(root, opt = {}) {
         if (need > BROWSER_LIMIT) { bigMsg = { need }; throw ""; }
       }
       engineSolveId = id;
-      patch({ status: "solving", cards: [Array.from(s.cards[0]), Array.from(s.cards[1])], mem: need });
+      const cards = [Array.from(s.cards[0]), Array.from(s.cards[1])];
+      const locks = (sv.locks || []).map(l => ({ hist: l.hist, acts: l.acts, s: lockStrategy(l, cards[l.p]) }));
+      if (locks.length && eng.kind === "app" && verLess(eng.version, "1.1.0")) throw `Node locks need the newest solver app (version 1.1). Download it again from the solver app page, or switch to solving in this browser.`;
+      let lockRes = [];
+      patch({ status: "solving", cards, mem: need });
       const t0 = Date.now(), target = Math.max(1, sp.pot * sp.acc / 100);
       let e0 = null;
-      const r = await eng.ask({ t: "solve", compress, target, maxIter: sp.maxIt }, d => d.t === "solved", d => {
+      const r = await eng.ask({ t: "solve", compress, target, maxIter: sp.maxIt, locks }, d => d.t === "solved", d => {
+        if (d.t === "locks") { lockRes = d.res || []; return; }
         if (d.t !== "progress") return;
         if (d.e != null && e0 == null) e0 = Math.max(d.e, target * 1.01);
         const f = d.e == null ? 0 : Math.max(Math.min(Math.log(e0 / Math.max(d.e, 1e-9)) / Math.log(e0 / target), 1), d.i / sp.maxIt, 0);
@@ -454,7 +463,9 @@ export function createSolver(root, opt = {}) {
         if (shared && Date.now() - lastProgSent > 800) { lastProgSent = Date.now(); T.send({ t: "sv", p: { prog } }); }
       });
       if (sv.solveId !== id) return; // someone started a different solve meanwhile
-      patch({ status: "ready", prog: null, info: { i: r.i, e: r.e, secs: (Date.now() - t0) / 1000, stopped: !!r.stopped } });
+      const applied = [], failed = [];
+      (sv.locks || []).forEach((l, i) => { const why = lockRes[i]; if (why === "") applied.push({ hist: l.hist, p: l.p, sum: l.sum, where: l.where }); else failed.push({ where: l.where, why: why || "the solver didn't confirm it" }); });
+      patch({ status: "ready", prog: null, solved: { ...sv.solved, locked: applied }, info: { i: r.i, e: r.e, secs: (Date.now() - t0) / 1000, stopped: !!r.stopped, lockFail: failed } });
     } catch (e) {
       const m = e && e.message ? e.message : String(e || "");
       if (sv.solveId === id) patch({ status: "idle", host: null, err: m, cards: null, solveId: null });
@@ -580,7 +591,7 @@ export function createSolver(root, opt = {}) {
     if (!r.flag) tabs.push(["eq0", shortName(0) + " equity"], ["eq1", shortName(1) + " equity"]);
     setHTML($("legend"), `<div class="tabs" style="width:100%;margin:0">${tabs.map(([v, l]) => `<button class="tab" type="button" data-view="${v}" aria-selected="${view === v}">${esc(l)}</button>`).join("")}</div>` +
       (view === "strat" ? node.actions.map(a => `<span><i style="background:${a.color}"></i>${esc(a.label)}</span>`).join("") : `<span><i style="background:#d1453b"></i>low equity</span><span><i style="background:#e8a33d"></i>middle</span><span><i style="background:#4caf73"></i>high equity</span><span>Fill height = how much of that hand is still in the range</span>`));
-    renderGrid(); renderDetail(); renderEqGraph();
+    renderGrid(); renderDetail(); renderEqGraph(); renderLockBar(); renderLockCmp();
   }
   function eqColor(x) {
     const a = [209, 69, 59], b = [232, 163, 61], c = [76, 175, 115];
@@ -717,6 +728,154 @@ export function createSolver(root, opt = {}) {
     if (bigMsg && bigMsg.need) return msg(`This tree needs about ${GB(bigMsg.need)} of memory, more than a browser can use (about 4 GB). Big trees run in the free <a href="${APP_PAGE}" target="_blank" rel="noopener">Hot Seat Solver app</a> on your computer. Smaller trees, like the Quick sizes, work right here without it. <button class="b sm" type="button" data-svcmd="app">Connect the solver app</button>`);
     msg(localErr ? esc(localErr) : sv.err ? esc(sv.err) : "");
   }
+  /* ---------- node locking: fix one player's strategy at a spot, then solve again ---------- */
+  let lockEd = null, lockPaint = null;
+  const verLess = (a, b) => { const x = String(a).split(".").map(Number), y = String(b).split(".").map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
+  const histKey = h => (h || []).join(",");
+  const whereOf = path => path.slice(1).map(st => st.label).join(" › ") || "the first decision";
+  const lockAt = h => (sv.locks || []).find(l => histKey(l.hist) === histKey(h));
+  // per-hand strategy for the engine: action-major, all zeros = the solver chooses
+  function lockStrategy(l, cards) {
+    const na = l.labels.length, nc = cards.length, out = new Array(na * nc).fill(0);
+    for (let i = 0; i < nc; i++) {
+      if (l.mode === "mix") { for (let a = 0; a < na; a++) out[a * nc + i] = Math.max(0, +l.mix[a] || 0); }
+      else { const a = l.cells[cellOf(cards[i])]; if (a != null && a >= 0 && a < na) out[a * nc + i] = 1; }
+    }
+    return out;
+  }
+  function lockSummary(l) {
+    const nm = shortName(l.p);
+    if (l.mode === "mix") return `${nm}: ` + l.labels.map((lb, a) => `${lb.toLowerCase()} ${Math.round((+l.mix[a] || 0) * 100)}%`).filter((x, a) => +l.mix[a] > 0).join(", ");
+    const cnt = l.labels.map((_, a) => Object.values(l.cells).filter(v => v === a).length);
+    const free = 169 - cnt.reduce((x, y) => x + y, 0);
+    return `${nm}: ` + l.labels.map((lb, a) => cnt[a] ? `${lb.toLowerCase()} with ${cnt[a]} hand type${cnt[a] === 1 ? "" : "s"}` : "").filter(Boolean).join(", ") + (free ? `; the solver picks for the other ${free}` : "");
+  }
+  function renderLockBar() {
+    const bar = $("lockBar"), ed = $("lockEd");
+    const isPlayer = node && (node.p === "oop" || node.p === "ip") && node.actions.length;
+    if (!isPlayer || explore) { setHTML(bar, ""); ed.hidden = true; lockEd = null; return; }
+    const path = curPath(), h = path[path.length - 1].hist, l = lockAt(h);
+    const inSolve = ((sv.solved && sv.solved.locked) || []).some(x => histKey(x.hist) === histKey(h));
+    let html = "";
+    if (inSolve) html += `<span class="lockchip on">🔒 Locked in this solve</span>`;
+    if (l) html += `<span class="lockchip">${inSolve ? "" : "🔒 Lock saved · solve again to use it · "}${esc(l.sum)}</span>`;
+    if (canEdit()) html += l ? `<button class="b sm" type="button" data-lk="edit">Edit lock</button><button class="b sm" type="button" data-lk="remove">Remove lock</button>`
+      : `<button class="b sm" type="button" data-lk="edit">🔒 Lock this spot</button>`;
+    setHTML(bar, html);
+    if (lockEd && lockEd.key !== histKey(h)) lockEd = null;
+    renderLockEd();
+  }
+  function startEdit() {
+    const path = curPath(), h = path[path.length - 1].hist, l = lockAt(h), k = node.p === "oop" ? 0 : 1;
+    const labels = node.actions.map(a => a.label.replace(/ \(.*\)/, ""));
+    lockEd = l && l.labels.length === labels.length ? { key: histKey(h), mode: l.mode, mix: l.mix.slice(), cells: { ...l.cells }, brush: 0 }
+      : { key: histKey(h), mode: "hands", mix: node.actions.map(a => Math.round((a.freq || 0) * 1000) / 1000), cells: {}, brush: 0 };
+    lockEd.k = k; lockEd.labels = labels;
+    renderLockEd();
+  }
+  function cellsInRange(k) { const st = cellStats(k); return st.map(c => c.nw > 0); }
+  function renderLockEd() {
+    const ed = $("lockEd");
+    if (!lockEd || !node || !node.actions.length) { ed.hidden = true; return; }
+    ed.hidden = false;
+    const L = lockEd, cols = node.actions.map(a => a.color), inR = cellsInRange(L.k);
+    let h = `<div class="lkhead"><b>Lock ${esc(nameOf(L.k))}'s strategy here</b><span class="muted">${esc(whereOf(curPath()))}</span></div>
+      <div class="tabs lktabs" role="tablist"><button class="tab" type="button" data-lk="mode" data-m="hands" aria-selected="${L.mode === "hands"}">Hand by hand</button><button class="tab" type="button" data-lk="mode" data-m="mix" aria-selected="${L.mode === "mix"}">Whole range</button></div>`;
+    if (L.mode === "mix") {
+      const tot = L.mix.reduce((a, b) => a + (+b || 0), 0);
+      h += `<p class="note">Every hand plays this mix. The numbers start at what the solver does now.</p><div class="lkmix">` + L.labels.map((lb, a) => `<label><span><i style="background:${cols[a]}"></i>${esc(lb)}</span><input type="range" min="0" max="100" step="1" data-lkmix="${a}" value="${Math.round((+L.mix[a] || 0) * 100)}"><input type="number" min="0" max="100" step="1" data-lkmixn="${a}" value="${Math.round((+L.mix[a] || 0) * 100)}"><span>%</span></label>`).join("") +
+        `</div><p class="note">Total ${Math.round(tot * 100)}%${Math.abs(tot - 1) > 0.005 ? " (it will be scaled to 100%)" : ""}.</p>`;
+    } else {
+      // how much of the range each action gets
+      const st = cellStats(L.k), share = L.labels.map(() => 0); let free = 0, all = 0;
+      st.forEach((c, i) => { all += c.nw; const a = L.cells[i]; if (a != null) share[a] += c.nw; else free += c.nw; });
+      h += `<p class="note">Pick an action, then paint the hands that always take it. Hands you leave grey are still up to the solver. Dim hands aren't in ${esc(shortName(L.k))}'s range here.</p>
+        <div class="row lkbrush">${L.labels.map((lb, a) => `<button class="b sm${L.brush === a ? " on" : ""}" type="button" data-lk="brush" data-a="${a}"><i style="background:${cols[a]}"></i>${esc(lb)}<small>${all ? pct(share[a] / all) : ""}</small></button>`).join("")}<button class="b sm${L.brush === -1 ? " on" : ""}" type="button" data-lk="brush" data-a="-1"><i class="free"></i>Solver picks<small>${all ? pct(free / all) : ""}</small></button></div>
+        <div class="rgrid lkgrid" id="sv-lkgrid">`;
+      for (let r = 0; r < 13; r++) for (let c = 0; c < 13; c++) {
+        const i = r * 13 + c, a = L.cells[i];
+        h += `<button type="button" class="rc${inR[i] ? "" : " out"}" data-lkc="${i}" style="${a != null ? `background:${cols[a]};color:#fff` : ""}">${cellName(r, c)}</button>`;
+      }
+      h += `</div><div class="row lkfill"><button class="b sm" type="button" data-lk="copy">Start from the solver's choices</button><button class="b sm" type="button" data-lk="fill">Paint the grey hands too</button><button class="b sm" type="button" data-lk="clear">Clear</button></div>`;
+    }
+    h += `<div class="row"><button class="b primary" type="button" data-lk="save">Save lock</button><button class="b" type="button" data-lk="cancel">Cancel</button></div>
+      <p class="note">Locks take effect when you solve again. Then compare: the other player's strategy and both players' EV move to answer this exact play.</p>`;
+    setHTML(ed, h);
+  }
+  function saveLock() {
+    const L = lockEd, path = curPath(), h = path[path.length - 1].hist;
+    if (L.mode === "mix" && !L.mix.some(x => +x > 0)) { localErr = "Give at least one action some of the range."; render(); return; }
+    if (L.mode === "hands" && !Object.keys(L.cells).length) { localErr = "Paint at least one hand, or use “Whole range”."; render(); return; }
+    const l = { id: rid(), hist: h.slice(), path: path.map(st => ({ ...st })), where: whereOf(path), p: L.k, acts: node.acts, labels: L.labels.slice(), mode: L.mode, mix: L.mix.map(x => Math.max(0, +x || 0)), cells: { ...L.cells } };
+    l.sum = lockSummary(l);
+    patch({ locks: (sv.locks || []).filter(x => histKey(x.hist) !== histKey(h)).concat(l).slice(0, 12) });
+    lockEd = null; localErr = ""; render();
+  }
+  $("lockBar").onclick = e => {
+    const b = e.target.closest("[data-lk]"); if (!b || !canEdit()) return;
+    if (b.dataset.lk === "edit") startEdit();
+    else if (b.dataset.lk === "remove") { const h = curPath().slice(-1)[0].hist; patch({ locks: (sv.locks || []).filter(x => histKey(x.hist) !== histKey(h)) }); lockEd = null; render(); }
+  };
+  $("lockEd").onclick = e => {
+    const b = e.target.closest("[data-lk]"); if (!b || !lockEd) return;
+    const L = lockEd, c = b.dataset.lk;
+    if (c === "mode") L.mode = b.dataset.m;
+    else if (c === "brush") L.brush = +b.dataset.a;
+    else if (c === "clear") L.cells = {};
+    else if (c === "fill") { if (L.brush >= 0) for (let i = 0; i < 169; i++) if (L.cells[i] == null) L.cells[i] = L.brush; }
+    else if (c === "copy") { // each hand type takes its most-used action right now
+      const st = cellStats(L.k), nc = sv.cards[L.k].length, r = node.r; L.cells = {};
+      st.forEach((cell, i) => { if (!cell.nw) return; const f = L.labels.map((_, a) => cell.hs.reduce((s2, hh) => s2 + r.norm[L.k][hh] * r.strat[a * nc + hh], 0)); L.cells[i] = f.indexOf(Math.max(...f)); });
+    }
+    else if (c === "save") return saveLock();
+    else if (c === "cancel") { lockEd = null; }
+    renderLockEd();
+  };
+  $("lockEd").addEventListener("input", e => {
+    const t = e.target, L = lockEd; if (!L) return;
+    const a = t.dataset.lkmix ?? t.dataset.lkmixn; if (a == null) return;
+    L.mix[+a] = Math.max(0, Math.min(100, +t.value || 0)) / 100;
+    const other = t.dataset.lkmix != null ? `[data-lkmixn="${a}"]` : `[data-lkmix="${a}"]`; const o = $("lockEd").querySelector(other); if (o) o.value = Math.round(L.mix[+a] * 100);
+    const tot = L.mix.reduce((x, y) => x + (+y || 0), 0), n = $("lockEd").querySelector(".lkmix + .note");
+    if (n) n.textContent = `Total ${Math.round(tot * 100)}%${Math.abs(tot - 1) > 0.005 ? " (it will be scaled to 100%)" : ""}.`;
+  });
+  // paint the lock grid: press and drag
+  $("lockEd").addEventListener("pointerdown", e => {
+    const b = e.target.closest("[data-lkc]"); if (!b || !lockEd) return;
+    e.preventDefault(); lockPaint = new Set(); paintLock(+b.dataset.lkc);
+  });
+  function paintLock(i) {
+    if (!lockPaint || lockPaint.has(i)) return; lockPaint.add(i);
+    const L = lockEd; if (L.brush < 0) delete L.cells[i]; else L.cells[i] = L.brush;
+    const el = $("lockEd").querySelector(`[data-lkc="${i}"]`); if (el) { const col = L.brush >= 0 ? node.actions[L.brush].color : ""; el.style.background = col; el.style.color = col ? "#fff" : ""; }
+  }
+  window.addEventListener("pointermove", e => { if (!lockPaint) return; const el = document.elementFromPoint(e.clientX, e.clientY), b = el && el.closest && el.closest("[data-lkc]"); if (b && $("lockEd").contains(b)) paintLock(+b.dataset.lkc); }, { signal: ac.signal });
+  window.addEventListener("pointerup", () => { if (lockPaint) { lockPaint = null; renderLockEd(); } }, { signal: ac.signal });
+  // locks list in the Solve part
+  function renderLockList() {
+    const ls = sv.locks || [], box = $("lockList");
+    if (!ls.length) { setHTML(box, ""); return; }
+    setHTML(box, `<h3>Node locks (${ls.length})</h3><p class="note">They take effect the next time you solve.</p>` + ls.map(l => `<div class="lockrow"><button type="button" class="linkbtn" data-lgo="${esc(l.id)}">${esc(l.where)}</button><span class="muted">${esc(l.sum)}</span>${canEdit() ? `<button class="b sm" type="button" data-lrm="${esc(l.id)}" aria-label="Remove this lock">Remove</button>` : ""}</div>`).join("") +
+      (canEdit() && ls.length > 1 ? `<button class="b sm" type="button" data-lrm="*">Remove all locks</button>` : ""));
+  }
+  $("lockList").onclick = e => {
+    const g = e.target.closest("[data-lgo]"), r = e.target.closest("[data-lrm]");
+    if (g) { const l = (sv.locks || []).find(x => x.id === g.dataset.lgo); if (l && sv.status === "ready") go(l.path, false); }
+    else if (r && canEdit()) { patch({ locks: r.dataset.lrm === "*" ? [] : (sv.locks || []).filter(x => x.id !== r.dataset.lrm) }); lockEd = null; render(); }
+  };
+  // before/after: the same spot solved without locks, at the first decision
+  const spotSig = sp => JSON.stringify({ ...sp, names: 0, acc: 0, maxIt: 0, locked: 0 });
+  function renderLockCmp() {
+    const box = $("lockCmp"), path = curPath();
+    if (!node || path.length !== 1 || !node.r || node.r.flag) { setHTML(box, ""); return; }
+    const r = node.r, avg = (vals, k) => { let s2 = 0, t = 0; for (let i = 0; i < r.norm[k].length; i++) { s2 += r.norm[k][i] * vals[i]; t += r.norm[k][i]; } return t ? s2 / t : 0; };
+    const ev = [avg(r.ev[0], 0), avg(r.ev[1], 1)], sig = spotSig(sv.solved), locked = (sv.solved.locked || []).length;
+    if (!locked) { if (canEdit() && (!sv.base || sv.base.sig !== sig || Math.abs(sv.base.ev[0] - ev[0]) > 1e-6)) patch({ base: { sig, ev } }); setHTML(box, ""); return; }
+    if (!sv.base || sv.base.sig !== sig) { setHTML(box, `<p class="note">Solve once with no locks to see how much the locks change each player's EV.</p>`); return; }
+    const d = [0, 1].map(k => ev[k] - sv.base.ev[k]);
+    setHTML(box, `<div class="cmp"><b>What the locks change, from the start of the hand</b>${[0, 1].map(k => `<span>${esc(nameOf(k))}: EV ${usd(sv.base.ev[k])} → <b>${usd(ev[k])}</b> <span class="${d[k] >= 0 ? "up" : "down"}">(${d[k] >= 0 ? "+" : "−"}${usd(Math.abs(d[k]))})</span></span>`).join("")}</div>`);
+  }
+
   function renderProgress() {
     const s = sv.status, mineRunning = sv.host === me() && solving;
     $("solve").disabled = !canEdit() || mineRunning || (s === "solving" || s === "setting") && sv.host && sv.host !== me();
@@ -733,7 +892,9 @@ export function createSolver(root, opt = {}) {
         : `Solving${who}${sv.mem ? ` with ${GB(sv.mem)} of memory` : ""}…`;
     } else if (s === "ready" && sv.info) {
       prog.hidden = false; $("progBar").style.width = "100%";
-      $("progTxt").textContent = `${sv.info.stopped ? "Stopped" : "Done"} after ${sv.info.i} iterations in ${sv.info.secs.toFixed(1)} s · within ${pct(sv.info.e / sv.solved.pot)} of perfect play.`;
+      const nl = (sv.solved.locked || []).length, lf = sv.info.lockFail || [];
+      $("progTxt").innerHTML = esc(`${sv.info.stopped ? "Stopped" : "Done"} after ${sv.info.i} iterations in ${sv.info.secs.toFixed(1)} s · within ${pct(sv.info.e / sv.solved.pot)} of perfect play.`) +
+        (nl ? ` <b>${nl} node lock${nl === 1 ? "" : "s"} in this solve.</b>` : "") + (lf.length ? `<br><span class="err">Skipped ${lf.length === 1 ? "a lock" : lf.length + " locks"}: ${lf.map(f => `${esc(f.where)} (${esc(f.why)})`).join("; ")}.</span>` : "");
     } else if (s === "lost") {
       prog.hidden = false; $("progBar").style.width = "0";
       $("progTxt").textContent = `${sv.hostName || "The computer that solved this"} left, so its results are gone. Press Solve to run it again.`;
@@ -855,7 +1016,7 @@ export function createSolver(root, opt = {}) {
   let raf = 0;
   function render() { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; renderNow(); }); }
   function renderNow() {
-    renderBar(); syncInputs(); renderPair(); renderBoard(); renderRangeGrid(); renderProgress(); renderEngine(); renderBig();
+    renderBar(); syncInputs(); renderPair(); renderLockList(); renderBoard(); renderRangeGrid(); renderProgress(); renderEngine(); renderBig();
     if (sv.status === "ready" && sv.cards && sv.solved) loadNode();
     else { $("resBody").hidden = true; $("resEmpty").hidden = false; node = null; nodeKey = "";
       $("resEmpty").textContent = sv.status === "solving" || sv.status === "setting" ? "Solving… the results show here when it's done." : "Set up a spot and press Solve. The answer shows here: how often each hand should check, bet, call or fold, street by street."; }
