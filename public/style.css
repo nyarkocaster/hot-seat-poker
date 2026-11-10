@@ -51,7 +51,11 @@ header.top h1{font-family:var(--f-display);font-weight:700;font-size:26px;letter
 .seat.me .plate{border-style:double;border-width:3px}
 .seat.folded{opacity:.5}
 .seat.empty .plate{background:transparent;border-style:dashed;color:var(--felt-ink);box-shadow:none}
-.hole{display:flex;gap:2px;min-height:max(34px,7.2cqw)}
+.hole{position:relative;display:flex;gap:2px;min-height:max(34px,7.2cqw)}
+.showeye{pointer-events:auto;position:absolute;top:-9px;right:-10px;z-index:2;font:600 max(9px,1.15cqw)/1 var(--f-body,inherit);padding:3px 6px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer;opacity:.85}
+.showeye:hover,.showeye:focus-visible{opacity:1;color:var(--ink);border-color:var(--brass)}
+.showeye.on{background:var(--brass);border-color:var(--brass);color:#fff;opacity:1}
+.openhole{outline:2px solid var(--brass);outline-offset:2px;border-radius:6px}
 .bet{position:absolute;pointer-events:none;transform:translate(-50%,-50%);font-family:var(--f-display);font-weight:600;font-size:max(12px,1.8cqw);color:var(--felt-ink);display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
 .bet::before{content:"";width:max(10px,1.6cqw);height:max(10px,1.6cqw);border-radius:50%;background:var(--brass);border:2px dashed rgba(255,255,255,.7)}
 .btnmark{position:absolute;pointer-events:none;transform:translate(-50%,-50%);width:max(18px,2.6cqw);height:max(18px,2.6cqw);border-radius:50%;background:#fff;color:#111;font:700 max(10px,1.4cqw)/1 var(--f-display);display:grid;place-items:center;box-shadow:0 1px 3px rgba(0,0,0,.4)}
@@ -178,7 +182,8 @@ a.b{text-decoration:none;color:inherit;display:inline-flex;align-items:center;ga
 .seg button+button{border-left:1px solid var(--line)}
 .seg button[aria-pressed=true]{background:var(--brass);color:#1a1405;font-weight:600}
 body.v-solver #game{display:none!important}
-body.v-both .wrap{max-width:1900px}
+body.v-both .wrap,body.v-solver .wrap{max-width:1900px}
+body.v-solver #dock{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
 body.v-both #duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
 body.v-both #game{grid-template-columns:minmax(0,1fr)}
 @media (max-width:1100px){body.v-both #duo{grid-template-columns:minmax(0,1fr)}}
@@ -353,13 +358,16 @@ body.dragging .dcol{outline:2px dashed var(--line);outline-offset:5px}
 
 /* windows inside a window (solver and notes parts) */
 .pal{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
-.pal.sub{gap:10px;padding:10px}
+.pal.nest{gap:10px;padding:10px}
 #svPal{container-type:inline-size}
-@container (max-width:760px){.pal.sub{grid-template-columns:minmax(0,1fr)}}
-.dk.sub{background:color-mix(in srgb,var(--bg) 40%,var(--panel));border-radius:10px}
-.dk.sub>.dk-h{padding:1px 3px;border-radius:10px 10px 0 0}
-.dk.sub.fold>.dk-h{border-radius:10px}
-.dk.sub>.dk-h .dk-t{font-size:11.5px}
+@container (max-width:640px){.pal.nest{grid-template-columns:minmax(0,1fr)}}
+/* a nested palette with everything in one column uses the full width (the empty column comes back while dragging) */
+body:not(.dragging) .pal.nest:has(> .dcol:empty){grid-template-columns:minmax(0,1fr)}
+body:not(.dragging) .pal.nest > .dcol:empty{display:none}
+.dk.nest{background:color-mix(in srgb,var(--bg) 40%,var(--panel));border-radius:10px}
+.dk.nest>.dk-h{padding:1px 3px;border-radius:10px 10px 0 0}
+.dk.nest.fold>.dk-h{border-radius:10px}
+.dk.nest>.dk-h .dk-t{font-size:11.5px}
 .dk-zoom{display:inline-flex;align-items:center;gap:0;opacity:0;transition:opacity .15s}
 .dk-h:hover>.dk-zoom,.dk-zoom:focus-within,.dk-zoom:has(.dk-z.on){opacity:1}
 @media (hover:none){.dk-zoom{opacity:1}}
@@ -372,7 +380,6 @@ body.dragging .dcol{outline:2px dashed var(--line);outline-offset:5px}
 .dk.fold>.dk-h>.dk-zoom{display:none}
 /* a little smaller range charts */
 .rgrid{max-width:460px}
-.rgrid.res{max-width:620px}
 .nbgrid{max-width:420px}
 .dkb .rc{font-size:clamp(8px,2.2cqw,11px)}
 .nbsub{display:flex;flex-direction:column;gap:8px}
@@ -413,3 +420,21 @@ body.dragging .dcol{outline:2px dashed var(--line);outline-offset:5px}
 .locklist{border-top:1px solid var(--line);margin-top:10px;padding-top:8px;display:flex;flex-direction:column;gap:6px}
 .locklist h3{margin:0;font-size:13.5px}
 .lockrow{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:12.5px}
+
+/* range boards: grid beside its controls when the window has room, stacked when it doesn't */
+#sv-pRange,#sv-pRes,.nb-pRange{container-type:inline-size}
+.rlay{display:flex;flex-direction:column}
+.rlay-c{display:contents}
+.rlay>.rgrid,.rlay>.rlay-g{order:1}
+.rlay-c>*{order:0}
+#sv-pRange .rlay-c>.paint,.rlay-c>.field,.rlay-c>.note,.rlay-c>.nbrtext,.rlay-c>.nberr,.rlay-c>.detail,.rlay-c>.eqgd{order:2}
+@container (min-width:500px){
+  .rlay{display:grid;grid-template-columns:minmax(0,460px) minmax(190px,1fr);gap:6px 16px;align-items:start}
+  .rlay-c{display:flex;flex-direction:column;gap:8px;grid-column:2;grid-row:1;min-width:0}
+  .rlay>.rgrid,.rlay>.rlay-g{grid-column:1;grid-row:1;max-width:none}
+  .nb-pRange .rlay{grid-template-columns:minmax(0,420px) minmax(190px,1fr)}
+  .rlay-c .fields{grid-template-columns:minmax(0,1fr)}
+  .rlay-c .nbtools{flex-wrap:wrap}
+  .rlay-c textarea{min-height:90px}
+  .reslay .eqgd{margin-top:4px}
+}
