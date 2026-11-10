@@ -464,7 +464,7 @@ export function createSolver(root, opt = {}) {
       });
       if (sv.solveId !== id) return; // someone started a different solve meanwhile
       const applied = [], failed = [];
-      (sv.locks || []).forEach((l, i) => { const why = lockRes[i]; if (why === "") applied.push({ hist: l.hist, p: l.p, sum: l.sum, where: l.where }); else failed.push({ where: l.where, why: why || "the solver didn't confirm it" }); });
+      (sv.locks || []).forEach((l, i) => { const why = lockRes[i]; if (why === "") applied.push({ hist: l.hist, p: l.p, sum: l.sum, where: l.where }); else failed.push({ hist: l.hist, sum: l.sum, where: l.where, why: why || "the solver didn't confirm it" }); });
       patch({ status: "ready", prog: null, solved: { ...sv.solved, locked: applied }, info: { i: r.i, e: r.e, secs: (Date.now() - t0) / 1000, stopped: !!r.stopped, lockFail: failed } });
     } catch (e) {
       const m = e && e.message ? e.message : String(e || "");
@@ -750,15 +750,24 @@ export function createSolver(root, opt = {}) {
     const free = 169 - cnt.reduce((x, y) => x + y, 0);
     return `${nm}: ` + l.labels.map((lb, a) => cnt[a] ? `${lb.toLowerCase()} with ${cnt[a]} hand type${cnt[a] === 1 ? "" : "s"}` : "").filter(Boolean).join(", ") + (free ? `; the solver picks for the other ${free}` : "");
   }
+  // do the saved locks differ from the ones this solve used?
+  function locksStale() {
+    if (!sv.solved) return false;
+    const sig = ls => ls.map(l => histKey(l.hist) + "|" + l.sum).sort().join(";");
+    const tried = (sv.solved.locked || []).concat(((sv.info && sv.info.lockFail) || []).map(f => ({ hist: f.hist, sum: f.sum })));
+    return sig(tried) !== sig(sv.locks || []);
+  }
   function renderLockBar() {
     const bar = $("lockBar"), ed = $("lockEd");
     const isPlayer = node && (node.p === "oop" || node.p === "ip") && node.actions.length;
     if (!isPlayer || explore) { setHTML(bar, ""); ed.hidden = true; lockEd = null; return; }
     const path = curPath(), h = path[path.length - 1].hist, l = lockAt(h);
-    const inSolve = ((sv.solved && sv.solved.locked) || []).some(x => histKey(x.hist) === histKey(h));
+    const used = ((sv.solved && sv.solved.locked) || []).find(x => histKey(x.hist) === histKey(h));
     let html = "";
-    if (inSolve) html += `<span class="lockchip on">🔒 Locked in this solve</span>`;
-    if (l) html += `<span class="lockchip">${inSolve ? "" : "🔒 Lock saved · solve again to use it · "}${esc(l.sum)}</span>`;
+    if (used && l && used.sum === l.sum) html += `<span class="lockchip on">🔒 Locked in this solve · ${esc(l.sum)}</span>`;
+    else if (used && l) html += `<span class="lockchip">🔒 Lock changed · these results use the old version, so solve again to use the new one · ${esc(l.sum)}</span>`;
+    else if (used) html += `<span class="lockchip">Lock removed · these results still include it, so solve again to see play without it</span>`;
+    else if (l) html += `<span class="lockchip">🔒 Lock saved · solve again to use it · ${esc(l.sum)}</span>`;
     if (canEdit()) html += l ? `<button class="b sm" type="button" data-lk="edit">Edit lock</button><button class="b sm" type="button" data-lk="remove">Remove lock</button>`
       : `<button class="b sm" type="button" data-lk="edit">🔒 Lock this spot</button>`;
     setHTML(bar, html);
@@ -894,7 +903,7 @@ export function createSolver(root, opt = {}) {
       prog.hidden = false; $("progBar").style.width = "100%";
       const nl = (sv.solved.locked || []).length, lf = sv.info.lockFail || [];
       $("progTxt").innerHTML = esc(`${sv.info.stopped ? "Stopped" : "Done"} after ${sv.info.i} iterations in ${sv.info.secs.toFixed(1)} s · within ${pct(sv.info.e / sv.solved.pot)} of perfect play.`) +
-        (nl ? ` <b>${nl} node lock${nl === 1 ? "" : "s"} in this solve.</b>` : "") + (lf.length ? `<br><span class="err">Skipped ${lf.length === 1 ? "a lock" : lf.length + " locks"}: ${lf.map(f => `${esc(f.where)} (${esc(f.why)})`).join("; ")}.</span>` : "");
+        (nl ? ` <b>${nl} node lock${nl === 1 ? "" : "s"} in this solve.</b>` : "") + (locksStale() ? `<br><b>Your locks have changed since this solve.</b> Solve again to update the results.` : "") + (lf.length ? `<br><span class="err">Skipped ${lf.length === 1 ? "a lock" : lf.length + " locks"}: ${lf.map(f => `${esc(f.where)} (${esc(f.why)})`).join("; ")}.</span>` : "");
     } else if (s === "lost") {
       prog.hidden = false; $("progBar").style.width = "0";
       $("progTxt").textContent = `${sv.hostName || "The computer that solved this"} left, so its results are gone. Press Solve to run it again.`;
