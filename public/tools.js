@@ -3,7 +3,7 @@
 //   same equation with this hand's numbers in it.
 // - Poker stove: equity of hands or ranges on any board, worked out in a background worker.
 import { parseCards, parseHolding, cardId, cardStr, countOuts, CATS } from "./equity.js";
-import { PRESETS } from "./solver/range.js";
+import { PRESETS, presetOptions } from "./solver/range.js";
 
 const SYM = { s: "♠", h: "♥", d: "♦", c: "♣" };
 const esc = t => String(t == null ? "" : t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -257,7 +257,7 @@ export function createStove(el, opt = {}) {
       box.innerHTML = rows.map((r, i) => `<div class="stvrow${i === sel ? " on" : ""}" data-i="${i}">
         <div class="sname"><span class="sdot c${i}"></span>${r.label ? esc(r.label) : `Player ${i + 1}`}${r.note ? `<span class="muted snote">${esc(r.note)}</span>` : ""}</div>
         <input type="text" data-hand="${i}" value="${esc(r.text)}" placeholder="${r.combos ? "Solver range at this spot (type to replace it)" : i ? "Blank = any two cards" : "Hand like AhKh, or a range like QQ+,AKs"}" spellcheck="false" autocomplete="off" aria-label="Player ${i + 1} hand or range">
-        <select data-preset="${i}" aria-label="Load a range for player ${i + 1}"><option value="">Range…</option>${Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join("")}</select>
+        <select data-preset="${i}" aria-label="Load a range for player ${i + 1}"><option value="">Range…</option>${presetOptions()}</select>
         ${rows.length > 2 ? `<button type="button" class="b sm sx" data-rm="${i}" aria-label="Remove player ${i + 1}">×</button>` : ""}
         <div class="sres" data-res="${i}"></div>
       </div>`).join("");
@@ -341,5 +341,7 @@ export function createStove(el, opt = {}) {
     setAll([{ text: r[0], label: `${nm[0]} (OOP)`, note: " · starting range" }, { text: r[1], label: `${nm[1]} (IP)`, note: " · starting range" }], sp && sp.board ? sp.board.map(cardStr).join(" ") : "");
   }
   draw();
-  return { refresh: draw, run, fromTable, get rows() { return rows; }, get result() { return res; }, destroy() { if (worker) worker.terminate(); worker = null; } };
+  const onCharts = () => el.querySelectorAll("select[data-preset]").forEach(s => { s.innerHTML = `<option value="">Range…</option>${presetOptions()}`; });
+  addEventListener("hsp-charts", onCharts);
+  return { refresh: draw, run, fromTable, get rows() { return rows; }, get result() { return res; }, destroy() { removeEventListener("hsp-charts", onCharts); if (worker) worker.terminate(); worker = null; } };
 }
