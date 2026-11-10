@@ -2,7 +2,7 @@
 // you add). Each tab has free text and its own blank 13×13 range to paint, so a range can be narrowed
 // street by street: the previous tab's range shows faintly under the current one, and the thread line
 // counts the combos left at each step. In a lobby the notebook is shared like the solver.
-import { cellName, parseRange, formatRange, comboCount, PRESETS } from "./solver/range.js";
+import { cellName, parseRange, formatRange, comboCount, PRESETS, presetOptions } from "./solver/range.js";
 
 const SYM = { s: "♠", h: "♥", d: "♦", c: "♣" };
 const MAX_TABS = 16, MAX_TEXT = 6000, MAX_RANGE = 3000, MAX_NAME = 24;
@@ -66,7 +66,7 @@ export function createNotes(el, opt = {}) {
         <div class="rlay"><div class="rlay-c">
         <div class="row nbtools">
           <button class="b sm" type="button" data-nb="carry"></button>
-          <select class="nbsel" data-nb="preset" aria-label="Load a starting range"><option value="">Load a starting range…</option>${Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join("")}</select>
+          <select class="nbsel" data-nb="preset" aria-label="Load a starting range"><option value="">Load a starting range…</option>${presetOptions()}</select>
           <select class="nbsel" data-nb="solver" aria-label="Use with the solver"></select>
           <button class="b sm" type="button" data-nb="clear">Clear range</button>
         </div>
@@ -281,6 +281,7 @@ export function createNotes(el, opt = {}) {
     if (b && gridEl.contains(b)) paintCell(+b.dataset.cell);
   }, sig);
   const endPaint = () => { if (!paint) return; paint = null; setRange(formatRange(gw)); };
+  addEventListener("hsp-charts", () => { const s = q('[data-nb="preset"]'); if (s) s.innerHTML = `<option value="">Load a starting range…</option>${presetOptions()}`; }, sig);
   window.addEventListener("pointerup", endPaint, sig); window.addEventListener("pointercancel", endPaint, sig);
 
   // the table moved to a new street: show that street's tab (unless someone is writing in the notes)
