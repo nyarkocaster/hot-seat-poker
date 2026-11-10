@@ -60,9 +60,9 @@ export function createNotes(el, opt = {}) {
       <div class="nbbody" role="tabpanel">
         <div class="nbthread" aria-label="Range thread"></div>
         <div class="nbboard"></div>
-        <label class="nblab" for="nb-text">Notes</label>
-        <textarea id="nb-text" rows="5" maxlength="${MAX_TEXT}" placeholder="What happened on this street, what they might have, the plan…"></textarea>
-        <div class="nbrhead"><span class="nblab">Range</span><span class="nbcount note"></span></div>
+        <div class="nbsub nb-pText"><label class="nblab" for="nb-text">Notes</label>
+        <textarea id="nb-text" rows="5" maxlength="${MAX_TEXT}" placeholder="What happened on this street, what they might have, the plan…"></textarea></div>
+        <div class="nbsub nb-pRange"><div class="nbrhead"><span class="nblab">Range</span><span class="nbcount note"></span></div>
         <div class="row nbtools">
           <button class="b sm" type="button" data-nb="carry"></button>
           <select class="nbsel" data-nb="preset" aria-label="Load a starting range"><option value="">Load a starting range…</option>${Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join("")}</select>
@@ -70,9 +70,9 @@ export function createNotes(el, opt = {}) {
           <button class="b sm" type="button" data-nb="clear">Clear range</button>
         </div>
         <div class="row paint"><label for="nb-paintW">Tap paints</label><input type="range" id="nb-paintW" min="0" max="100" step="5" value="100"><span class="nbpw">100%</span></div>
-        <div class="rgrid nbgrid" aria-label="Notes range grid"></div>
+        <div class="rgrid nbgrid" data-anc="svnbgrid" aria-label="Notes range grid"></div>
         <textarea id="nb-rtext" class="nbrtext" rows="2" spellcheck="false" maxlength="${MAX_RANGE}" placeholder="Paint the grid or type a range, like QQ+,AK,A5s"></textarea>
-        <p class="err nberr" role="status"></p>
+        <p class="err nberr" role="status"></p></div>
         <div class="row nbfoot"><button class="b sm" type="button" data-nb="wipe">Clear all notes</button></div>
       </div>
     </div>`;
@@ -303,6 +303,7 @@ export function createNotes(el, opt = {}) {
   return {
     onMessage, tableUpdate, refresh: render,
     get notebook() { return nb; },
+    body: el.querySelector(".nbbody"), foot: el.querySelector(".nbfoot"),
     get active() { return active; },
     destroy() { ac.abort(); timers.forEach(t => clearTimeout(t)); },
   };
