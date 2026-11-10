@@ -1,6 +1,6 @@
 [package]
 name = "hot-seat-solver"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 license = "AGPL-3.0-or-later"
 description = "Hot Seat Solver: runs big postflop solves on your own computer for hotseatpoker.com"
