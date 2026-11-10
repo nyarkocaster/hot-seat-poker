@@ -200,10 +200,61 @@ impl Solver {
 
     /// Actions at the current node, e.g. "Check:0/Bet:430/Allin:19000".
     pub fn actions(&self) -> String {
-        if self.game.is_terminal_node() || self.game.is_chance_node() {
+        actions_of(&self.game)
+    }
+
+    /// Node locking: fixes the strategy of the player acting at the node reached by `history`
+    /// (same format as apply_history). `strategy` is action-major (action * hands + hand) for that
+    /// player's hands; a hand whose values are all zero is left for the solver to choose.
+    /// `expected_actions` must match actions() at that node, so a lock made on an older tree
+    /// isn't put in the wrong place. Call after allocate_memory and before solve_step.
+    /// Returns "" when the lock is set, otherwise the reason it wasn't.
+    pub fn lock_at(&mut self, history: &[u32], strategy: &[f32], expected_actions: &str) -> String {
+        let why = self.lock_inner(history, strategy, expected_actions);
+        self.game.back_to_root();
+        why
+    }
+}
+
+impl Solver {
+    fn lock_inner(&mut self, history: &[u32], strategy: &[f32], expected_actions: &str) -> String {
+        let game = &mut self.game;
+        game.back_to_root();
+        for &x in history {
+            let x = x as usize;
+            if game.is_terminal_node() {
+                return "that line ends before the spot".to_string();
+            }
+            if game.is_chance_node() {
+                if x >= 52 || (game.possible_cards() >> x) & 1 == 0 {
+                    return "a card on that line can't come".to_string();
+                }
+            } else if x >= game.available_actions().len() {
+                return "the actions on that line have changed".to_string();
+            }
+            game.play(x);
+        }
+        if game.is_terminal_node() || game.is_chance_node() {
+            return "nobody acts at that spot".to_string();
+        }
+        if actions_of(game) != expected_actions {
+            return "the bet sizes at that spot have changed".to_string();
+        }
+        let player = game.current_player();
+        let need = game.available_actions().len() * game.private_cards(player).len();
+        if strategy.len() != need {
+            return "the ranges have changed".to_string();
+        }
+        game.lock_current_strategy(strategy);
+        String::new()
+    }
+}
+
+fn actions_of(game: &PostFlopGame) -> String {
+        if game.is_terminal_node() || game.is_chance_node() {
             return String::new();
         }
-        self.game
+        game
             .available_actions()
             .iter()
             .map(|&x| match x {
@@ -217,8 +268,10 @@ impl Solver {
             })
             .collect::<Vec<_>>()
             .join("/")
-    }
+}
 
+#[wasm_bindgen]
+impl Solver {
     /// At a chance node: bitmask of the cards that can come (bit n = card id n).
     pub fn possible_cards(&self) -> f64 {
         self.game.possible_cards() as f64
@@ -338,6 +391,65 @@ mod tests {
         // navigate: check, then IP acts
         s.apply_history(&[0]);
         assert_eq!(s.current_player(), "ip");
+    }
+
+    #[test]
+    fn node_lock_holds_and_moves_the_other_player() {
+        let setup = || {
+            let mut s = Solver::new();
+            let board = [card("Qs"), card("Jh"), card("2h"), card("8d"), card("3c")];
+            let err = s.init(
+                "AA,KK,QQ,AQs,AQo,KQs,QJs,JTs,T9s,98s,87s,A5s:0.5",
+                "AA,KK,QQ,JJ,TT,AKs,AKo,AQs,AQo,KQs,QJs,JTs:0.75",
+                &board, 2000, 9000, 0.0, 0.0, "75%", "", "75%", "", "75%", "", 1.5, 0.15, 0.1,
+            );
+            assert_eq!(err, None);
+            s.allocate_memory(false);
+            s
+        };
+        let solve = |s: &mut Solver| {
+            for i in 0..300 { s.solve_step(i); }
+            s.finalize();
+        };
+        // the same spot solved normally, for comparison: IP's EV after OOP checks
+        let mut plain = setup();
+        solve(&mut plain);
+        plain.apply_history(&[0]);
+        let acts = plain.actions();
+        let ip_ev = |s: &mut Solver| { let r = s.get_results(); let n0 = s.private_cards(0).len(); let n1 = s.private_cards(1).len();
+            let (w, ev) = (&r[3 + n0 + n1 + n0..3 + n0 + n1 + n0 + n1], &r[3 + 2 * (n0 + n1) + 2 * n0 + n1..3 + 2 * (n0 + n1) + 2 * n0 + 2 * n1]);
+            let t: f64 = w.iter().sum(); w.iter().zip(ev).map(|(a, b)| a * b).sum::<f64>() / t };
+        let ev_plain = ip_ev(&mut plain);
+
+        // lock OOP's first decision: always check (action 0) with every hand
+        let mut s = setup();
+        let n0 = s.private_cards(0).len();
+        let root = s.actions();
+        let na = root.split('/').count();
+        let mut strat = vec![0.0f32; na * n0];
+        for h in 0..n0 { strat[h] = 1.0; }
+        assert_eq!(s.lock_at(&[], &strat, &root), "");
+        // a wrong place or an old tree is refused, not a crash
+        assert_ne!(s.lock_at(&[5], &strat, &root), "");
+        assert_ne!(s.lock_at(&[], &strat, "Check:0/Bet:1"), "");
+        assert_ne!(s.lock_at(&[], &strat[1..], &root), "");
+        // lock IP after the check: always bet (action 1) with every hand
+        let n1 = s.private_cards(1).len();
+        let mut st1 = vec![0.0f32; 2 * n1];
+        for h in 0..n1 { st1[n1 + h] = 1.0; }
+        assert_eq!(s.lock_at(&[0], &st1, &acts), "");
+        solve(&mut s);
+        s.apply_history(&[]);
+        let r = s.get_results();
+        let n1b = s.private_cards(1).len();
+        let base = 3 + 5 * (n0 + n1b);
+        for h in 0..n0 { assert!((r[base + h] - 1.0).abs() < 1e-3, "OOP hand {h} should always check, got {}", r[base + h]); }
+        s.apply_history(&[0]);
+        let r = s.get_results();
+        let base = 3 + 5 * (n0 + n1);
+        for h in 0..n1 { assert!((r[base + n1 + h] - 1.0).abs() < 1e-3, "IP hand {h} should always bet"); }
+        let ev_locked = ip_ev(&mut s);
+        assert!((ev_locked - ev_plain).abs() > 1.0, "locking should change IP's EV: {ev_plain} vs {ev_locked}");
     }
 
     #[test]
