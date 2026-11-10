@@ -4,6 +4,7 @@ import {createSolver} from "./solver/core.js";
 import {createDock,solverPalette,notesPalette} from "./dock.js";
 import {createNotes} from "./notes.js";
 import {createOdds,createStove} from "./tools.js";
+import {createCharts} from "./charts.js";
 
 const $=s=>document.querySelector(s);
 const esc=t=>String(t==null?"":t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -60,6 +61,7 @@ function onMsg(m){
     if(SV) SV.onMessage(m);
   }
   else if(m.t==="nb"){if(NB) NB.onMessage(m)}
+  else if(m.t==="pf"){if(CH) CH.onMessage(m)}
   else if(m.t==="poll"){POLL=m.poll||null;if(POLL&&pollPick&&pollPick.id!==POLL.id) pollPick=null;if(POLL&&POLL.id!==pollSeen){pollSeen=POLL.id;pollMin=false}renderPoll()}
 }
 
@@ -68,7 +70,7 @@ const TOOLS=lsGet("hsp-tools")||{};
 function setTool(k,on){
   TOOLS[k]=!!on; lsSet("hsp-tools",TOOLS); render();
   if(on){const P=view(); if(k==="odds"&&ODDS){ODDS.refresh();} if(k==="notes"&&NB){NB.refresh();} if(k==="stove"&&STOVE&&P&&["preflop","flop","turn","river"].includes(P.phase)&&STOVE.rows.every(r=>!r.text)) STOVE.fromTable();
-    const el=$(k==="odds"?"#oddsPanel":k==="notes"?"#notesPanel":"#stovePanel"); setTimeout(()=>{const w=el.closest(".dk")||el; w.scrollIntoView({behavior:"smooth",block:"nearest"})},60)}
+    const el=$(k==="odds"?"#oddsPanel":k==="notes"?"#notesPanel":k==="charts"?"#chartsPanel":"#stovePanel"); setTimeout(()=>{const w=el.closest(".dk")||el; w.scrollIntoView({behavior:"smooth",block:"nearest"})},60)}
 }
 
 /* ---------- polls: the teacher asks, everyone answers privately, then the answers are shown ---------- */
@@ -150,12 +152,12 @@ function renderPoll(force){
 }
 
 /* ---------- the solver, in this window ---------- */
-let SV=null, NB=null, ODDS=null, STOVE=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
+let SV=null, NB=null, ODDS=null, STOVE=null, CH=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
 const DOCK=createDock($("#duo")), SVPAL=solverPalette($("#svPal")); let NBPAL=null;
 function unmountSolver(){
   DOCK.release(); SVPAL.release(); if(NBPAL) NBPAL.release(); NBPAL=null;
-  if(SV) SV.destroy(); if(NB) NB.destroy(); if(STOVE) STOVE.destroy(); SV=null; NB=null; ODDS=null; STOVE=null;
-  $("#solverRoot").innerHTML=""; $("#notesPanel").innerHTML=""; $("#oddsPanel").innerHTML=""; $("#stovePanel").innerHTML="";
+  if(SV) SV.destroy(); if(NB) NB.destroy(); if(STOVE) STOVE.destroy(); if(CH) CH.destroy(); SV=null; NB=null; ODDS=null; STOVE=null; CH=null;
+  $("#solverRoot").innerHTML=""; $("#notesPanel").innerHTML=""; $("#oddsPanel").innerHTML=""; $("#stovePanel").innerHTML=""; $("#chartsPanel").innerHTML="";
   POLL=null; pollDraft=null; pollPick=null;
 }
 function mountSolver(){
@@ -168,6 +170,7 @@ function mountSolver(){
   STOVE=createStove($("#stovePanel"),{table:tbl,solver:()=>solverAllowed()?SV:null,odds:()=>TOOLS.odds?ODDS:null,flash});
   NB=createNotes($("#notesPanel"),{transport:mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},canEdit:()=>isT()||svOn}:null,table:{current:()=>view()},solver:()=>SV,flash});
   NBPAL=notesPalette(NB.body,NB.foot); NBPAL.set("main");
+  CH=createCharts($("#chartsPanel"),{transport:mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},canEdit:()=>isT()}:null,isTeacher:()=>isT()||mode==="local",flash});
   svOn=mode==="local";
 }
 const solverAllowed=()=>!!mode&&(isT()||svOn);
@@ -185,6 +188,7 @@ function applyView(){
   const sw=$("#viewSwitch"); sw.hidden=!ok;
   sw.querySelectorAll("[data-view-mode]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.viewMode===v)));
   const stoveOk=stoveAllowed();
+  $("#chartsPanel").hidden=!mode||!TOOLS.charts;
   $("#oddsPanel").hidden=!mode||!TOOLS.odds; $("#stovePanel").hidden=!mode||!TOOLS.stove||!stoveOk;
   const notesOk=solverAllowed(); $("#notesPanel").hidden=!mode||TOOLS.notes===false||!notesOk;
   const nc=document.querySelector('[data-tool="notes"]'); if(nc){nc.disabled=!notesOk;} const nn=$("#notesNote"); if(nn) nn.textContent=notesOk?"":" · opens when the solver does";
