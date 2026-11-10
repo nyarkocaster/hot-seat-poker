@@ -751,7 +751,17 @@ function openFromHash(){
   if(!myName){homeErr("Enter your name, then join the lobby from the list.");$("#homeName").focus();return}
   if(code) enterLobby(id,"teacher",code); else enterLobby(id,"student");
 }
-window.addEventListener("hashchange",()=>{if(!mode) openFromHash()});
+window.addEventListener("hashchange",()=>{if(!mode&&!new URLSearchParams(location.search).has("frame_id")) openFromHash()});
 $("#homeName").value=myName; $("#newCode").value=suggestCode();
 updateConn(); render();
-loadLobbies().then(()=>{updateConn();openFromHash()});
+// inside a Discord voice channel (an Activity): sign in with Discord and go straight to this call's table
+const IN_DISCORD=new URLSearchParams(location.search).has("frame_id");
+if(IN_DISCORD){
+  document.body.classList.add("in-discord");
+  homeErr("Connecting to Discord…");
+  import("./discord.js").then(m=>m.startDiscord()).then(j=>{
+    homeErr(""); myName=j.name; $("#homeName").value=j.name; lsSet("hsp-name",myName);
+    if(j.role==="teacher"&&j.code) saveCode(j.id,j.code);
+    enterLobby(j.id,j.role,j.code);
+  }).catch(e=>homeErr("Couldn't open the table in Discord: "+(e&&e.message||e)));
+} else loadLobbies().then(()=>{updateConn();openFromHash()});

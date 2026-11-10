@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Hot Seat Poker · a live table for teaching poker</title>
 <meta name="description" content="A free live poker table for teaching. The teacher sets every card, students take a seat from any device, and a solver checks the spot you just played.">
+<script>if(/[?&]frame_id=/.test(location.search))location.replace("/play/"+location.search+location.hash);</script>
 <script>
 // older lobby links pointed here (hotseatpoker.com/#lobby-abc123): send them to the table
 if(/^#lobby-/.test(location.hash)) location.replace("/play/"+location.hash);

@@ -12,6 +12,9 @@ async function sha(s){const b=await crypto.subtle.digest("SHA-256",new TextEncod
 const normCode=c=>String(c||"").trim().toUpperCase().replace(/\s+/g,"").slice(0,40);
 const cleanName=n=>String(n||"").replace(/[\u0000-\u001f\u007f​-‏‪-‮]/g,"").trim().slice(0,16);
 const DC_RE=/^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/webhooks\/\d{5,25}\/[\w-]{20,100}$/;
+// Discord Activity (the table inside a Discord voice channel). The client secret is a Cloudflare secret.
+const DISCORD_ID="1569779005278658682";
+const dApi=env=>env.DISCORD_API||"https://discord.com/api";
 const DC_AUTO_GAP=30*60*1000, DC_MANUAL_GAP=60*1000;
 const lobbyStub=(env,id)=>env.LOBBY.get(env.LOBBY.idFromName(id));
 const dirStub=env=>env.DIRECTORY.get(env.DIRECTORY.idFromName("main"));
@@ -33,6 +36,28 @@ export default {
         const id=rid(6);
         await lobbyStub(env,id).init(id,String(b.name||"").trim().slice(0,28)||name,await sha(id+"|"+code));
         return json({id});
+      }
+      if(p==="/api/discord/token"&&req.method==="POST"){
+        let b={}; try{b=await req.json()}catch(e){}
+        const code=String(b.code||""); if(!/^[\w-]{3,200}$/.test(code)) return json({error:"Bad request."},400);
+        if(!env.DISCORD_CLIENT_SECRET) return json({error:"The Discord app isn't set up yet: the site owner needs to add DISCORD_CLIENT_SECRET in Cloudflare."},503);
+        const r=await fetch(dApi(env)+"/oauth2/token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},
+          body:new URLSearchParams({client_id:DISCORD_ID,client_secret:env.DISCORD_CLIENT_SECRET,grant_type:"authorization_code",code})});
+        let j={}; try{j=await r.json()}catch(e){}
+        if(!r.ok||!j.access_token) return json({error:"Discord didn't accept the sign-in. Close the activity and open it again."},401);
+        return json({access_token:j.access_token});
+      }
+      if(p==="/api/discord/join"&&req.method==="POST"){
+        let b={}; try{b=await req.json()}catch(e){}
+        const tok=String(b.access_token||""), inst=String(b.instance||"");
+        if(!tok||tok.length>200||!/^[\w-]{1,100}$/.test(inst)) return json({error:"Bad request."},400);
+        const r=await fetch(dApi(env)+"/users/@me",{headers:{authorization:"Bearer "+tok}});
+        let u={}; try{u=await r.json()}catch(e){}
+        if(!r.ok||!u.id) return json({error:"Discord didn't recognise you. Close the activity and open it again."},401);
+        const name=cleanName(u.global_name||u.username)||"Player";
+        const id="d"+(await sha("discord|"+inst)).slice(0,10);
+        const res=await lobbyStub(env,id).discordJoin(id,String(u.id),name);
+        return json({id,name,...res});
       }
       let m=/^\/api\/lobbies\/([a-z0-9]{3,12})\/delete$/.exec(p);
       if(m&&req.method==="POST"){let b={};try{b=await req.json()}catch(e){} const r=await lobbyStub(env,m[1]).destroy(m[1],normCode(b.code));return json(r,r.ok?200:403)}
@@ -70,6 +95,18 @@ export class Lobby extends DurableObject{
     this.meta={id,name,hash,created:Date.now()}; this.E.G=freshGame(name); this.E.history.length=0;
     await this.ctx.storage.put({meta:this.meta,g:this.E.G,hist:[],toks:{}});
     await this.dirUpdate(true);
+  }
+  // one lobby per Discord Activity instance: whoever opens it first teaches, everyone else joins as a student
+  async discordJoin(id,uid,name){
+    if(!this.meta){
+      const code=rid(10);
+      this.meta={id,name:`${name}'s table`.slice(0,28),hash:await sha(id+"|"+normCode(code)),created:Date.now(),private:true};
+      this.E.G=freshGame(this.meta.name); this.E.history.length=0; this.dco={owner:uid,code};
+      await this.ctx.storage.put({meta:this.meta,g:this.E.G,hist:[],toks:{},dco:this.dco});
+    }
+    if(!this.dco) this.dco=(await this.ctx.storage.get("dco"))||null;
+    const t=!!this.dco&&this.dco.owner===uid;
+    return t?{role:"teacher",code:this.dco.code}:{role:"student"};
   }
   async destroy(id,code){
     // Already gone (or never existed): just make sure no leftover list entry remains.
@@ -163,7 +200,7 @@ export class Lobby extends DurableObject{
     this.broadcastState(); this.broadcastPeers(); await this.dirUpdate();
   }
   async dirUpdate(force){
-    if(!this.meta||!this.E.G) return;
+    if(!this.meta||!this.E.G||this.meta.private) return; // Discord tables aren't listed on the site
     const G=this.E.G, socks=this.sockets();
     const s={id:this.meta.id,name:G.lname||this.meta.name,created:this.meta.created,stakes:`$${G.blinds.sb}/$${G.blinds.bb}`,size:G.size,
       seated:G.seats.filter((x,i)=>i<G.size&&x.uid).length,hand:G.hand,teachers:socks.filter(x=>x.a.role==="teacher").length,
