@@ -20,6 +20,7 @@ export const solver_apply_history: (a: number, b: number, c: number) => void;
 export const solver_total_bet_amount: (a: number) => [number, number];
 export const solver_current_player: (a: number) => [number, number];
 export const solver_actions: (a: number) => [number, number];
+export const solver_lock_at: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
 export const solver_possible_cards: (a: number) => number;
 export const solver_get_results: (a: number) => [number, number];
 export const __wbindgen_export_0: WebAssembly.Table;

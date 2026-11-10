@@ -116,6 +116,22 @@ function getArrayU32FromWasm0(ptr, len) {
     return getUint32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
 }
 
+let cachedFloat32ArrayMemory0 = null;
+
+function getFloat32ArrayMemory0() {
+    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
+        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
+    }
+    return cachedFloat32ArrayMemory0;
+}
+
+function passArrayF32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getFloat32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
 let cachedFloat64ArrayMemory0 = null;
 
 function getFloat64ArrayMemory0() {
@@ -297,6 +313,36 @@ export class Solver {
         }
     }
     /**
+     * Node locking: fixes the strategy of the player acting at the node reached by `history`
+     * (same format as apply_history). `strategy` is action-major (action * hands + hand) for that
+     * player's hands; a hand whose values are all zero is left for the solver to choose.
+     * `expected_actions` must match actions() at that node, so a lock made on an older tree
+     * isn't put in the wrong place. Call after allocate_memory and before solve_step.
+     * Returns "" when the lock is set, otherwise the reason it wasn't.
+     * @param {Uint32Array} history
+     * @param {Float32Array} strategy
+     * @param {string} expected_actions
+     * @returns {string}
+     */
+    lock_at(history, strategy, expected_actions) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const ptr0 = passArray32ToWasm0(history, wasm.__wbindgen_malloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passArrayF32ToWasm0(strategy, wasm.__wbindgen_malloc);
+            const len1 = WASM_VECTOR_LEN;
+            const ptr2 = passStringToWasm0(expected_actions, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len2 = WASM_VECTOR_LEN;
+            const ret = wasm.solver_lock_at(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
+            deferred4_0 = ret[0];
+            deferred4_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
+        }
+    }
+    /**
      * At a chance node: bitmask of the cards that can come (bit n = card id n).
      * @returns {number}
      */
@@ -378,6 +424,7 @@ function __wbg_init_memory(imports, memory) {
 function __wbg_finalize_init(instance, module) {
     wasm = instance.exports;
     __wbg_init.__wbindgen_wasm_module = module;
+    cachedFloat32ArrayMemory0 = null;
     cachedFloat64ArrayMemory0 = null;
     cachedUint16ArrayMemory0 = null;
     cachedUint32ArrayMemory0 = null;

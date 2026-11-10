@@ -42,6 +42,15 @@ export class Solver {
    */
   actions(): string;
   /**
+   * Node locking: fixes the strategy of the player acting at the node reached by `history`
+   * (same format as apply_history). `strategy` is action-major (action * hands + hand) for that
+   * player's hands; a hand whose values are all zero is left for the solver to choose.
+   * `expected_actions` must match actions() at that node, so a lock made on an older tree
+   * isn't put in the wrong place. Call after allocate_memory and before solve_step.
+   * Returns "" when the lock is set, otherwise the reason it wasn't.
+   */
+  lock_at(history: Uint32Array, strategy: Float32Array, expected_actions: string): string;
+  /**
    * At a chance node: bitmask of the cards that can come (bit n = card id n).
    */
   possible_cards(): number;
@@ -85,6 +94,7 @@ export interface InitOutput {
   readonly solver_total_bet_amount: (a: number) => [number, number];
   readonly solver_current_player: (a: number) => [number, number];
   readonly solver_actions: (a: number) => [number, number];
+  readonly solver_lock_at: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
   readonly solver_possible_cards: (a: number) => number;
   readonly solver_get_results: (a: number) => [number, number];
   readonly __wbindgen_export_0: WebAssembly.Table;
