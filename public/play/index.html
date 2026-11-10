@@ -27,7 +27,8 @@
         <label class="toggle sm"><input type="checkbox" data-tool="odds"><span>Odds calculator <span class="muted">· pot odds, outs and EV, with the math</span></span></label>
         <label class="toggle sm"><input type="checkbox" data-tool="notes"><span>Notes <span class="muted">· a tab per street, with a range to paint<span id="notesNote"></span></span></span></label>
         <label class="toggle sm"><input type="checkbox" data-tool="stove"><span>Poker stove <span class="muted">· equity of hands and ranges<span id="stoveNote"></span></span></span></label>
-        <span class="note">Only you see the odds calculator and stove. Notes are shared with the lobby, like the solver.</span>
+        <label class="toggle sm"><input type="checkbox" data-tool="charts"><span>Preflop charts <span class="muted">· the starting ranges everyone loads</span></span></label>
+        <span class="note">Only you see the odds calculator and stove. Notes are shared with the lobby, like the solver. Teachers edit the preflop charts; everyone can read them.</span>
       </span></span>
     <span class="seg" id="viewSwitch" role="group" aria-label="Show" hidden><button type="button" data-view-mode="table" aria-pressed="true">Table</button><button type="button" data-view-mode="both" aria-pressed="false">Side by side</button><button type="button" data-view-mode="solver" aria-pressed="false">Solver</button></span>
     <button class="b sm" type="button" id="dockReset" hidden title="Put every panel back in its starting place">Reset layout</button>
@@ -70,6 +71,7 @@
       <div class="panel tool" id="oddsPanel" data-anc="odds" hidden></div>
       <div class="panel tool" id="stovePanel" data-anc="stove" hidden></div>
       <div class="panel nb" id="notesPanel" data-anc="svnotes" hidden></div>
+      <div class="panel tool" id="chartsPanel" data-anc="charts" hidden></div>
       <div class="panel" id="logPanel" data-anc="log"><h2>Hand log</h2><ul class="log" id="log"></ul></div>
     </div>
     <aside id="side" data-anc="side"></aside>
