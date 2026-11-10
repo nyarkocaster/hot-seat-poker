@@ -193,7 +193,7 @@ export function createSolver(root, opt = {}) {
         <div class="field" id="sv-pairF" hidden><label for="sv-pair">Players to study</label><select id="sv-pair"></select></div>
         <div class="field"><label>Board <span class="muted">(3 to 5 cards, tap to add or remove)</span></label>
           <div class="boardrow" id="sv-boardShow"></div>
-          <div class="deck sdeck" id="sv-deck"></div>
+          <div class="deck sdeck" id="sv-deck"${anc("svdeck")}></div>
         </div>
         <div class="fields">
           <div class="field"><label for="sv-pot">Pot at the start of this street ($)</label><input type="number" id="sv-pot" data-k="pot" min="0.01" step="0.01"></div>
@@ -212,7 +212,7 @@ export function createSolver(root, opt = {}) {
           <div class="field"><label for="sv-who">Player</label><input type="text" id="sv-who" maxlength="24"></div>
           <div class="field"><label for="sv-preset">Load a starting range</label><select id="sv-preset"><option value="">Choose…</option>${Object.keys(PRESETS).map(k => `<option>${esc(k)}</option>`).join("")}</select></div>
         </div>
-        <div class="rgrid" id="sv-rgrid" aria-label="Range grid"></div>
+        <div class="rgrid" id="sv-rgrid"${anc("svrgrid")} aria-label="Range grid"></div>
         <div class="row paint"><label for="sv-paintW">Tap paints</label><input type="range" id="sv-paintW" min="0" max="100" step="5" value="100"><span id="sv-paintTxt">100%</span>
           <button class="b sm" type="button" id="sv-clearR">Clear</button></div>
         <div class="field"><label for="sv-rtext">Range text</label><textarea id="sv-rtext" rows="3" spellcheck="false"></textarea></div>
@@ -255,6 +255,7 @@ export function createSolver(root, opt = {}) {
           <div class="rgrid res" id="sv-sgrid"${anc("svgrid")}></div>
           <div class="legend" id="sv-legend"></div>
           <div class="detail" id="sv-detail"></div>
+          <details class="eqgd" id="sv-eqgD" open><summary>Equity graph</summary><div id="sv-eqg"${anc("sveqg")}></div></details>
         </div>
       </div>
     </section>
@@ -579,7 +580,7 @@ export function createSolver(root, opt = {}) {
     if (!r.flag) tabs.push(["eq0", shortName(0) + " equity"], ["eq1", shortName(1) + " equity"]);
     setHTML($("legend"), `<div class="tabs" style="width:100%;margin:0">${tabs.map(([v, l]) => `<button class="tab" type="button" data-view="${v}" aria-selected="${view === v}">${esc(l)}</button>`).join("")}</div>` +
       (view === "strat" ? node.actions.map(a => `<span><i style="background:${a.color}"></i>${esc(a.label)}</span>`).join("") : `<span><i style="background:#d1453b"></i>low equity</span><span><i style="background:#e8a33d"></i>middle</span><span><i style="background:#4caf73"></i>high equity</span><span>Fill height = how much of that hand is still in the range</span>`));
-    renderGrid(); renderDetail();
+    renderGrid(); renderDetail(); renderEqGraph();
   }
   function eqColor(x) {
     const a = [209, 69, 59], b = [232, 163, 61], c = [76, 175, 115];
@@ -592,6 +593,29 @@ export function createSolver(root, opt = {}) {
     const cs = sv.cards[k], r = node.r;
     for (let i = 0; i < cs.length; i++) { const c = cells[cellOf(cs[i])]; c.hs.push(i); c.w += r.w[k][i]; c.nw += r.norm[k][i]; }
     return cells;
+  }
+  // each player's hands at this spot, best to worst: how much of the range has at least this much equity
+  function renderEqGraph() {
+    const box = $("eqg"), r = node && node.r;
+    if (!r || !r.eq || !r.norm) { $("eqgD").hidden = true; return; }
+    $("eqgD").hidden = false;
+    const W = 560, H = 220, L = 40, B = 26, T = 10, Rr = 10, iw = W - L - Rr, ih = H - T - B;
+    const cols = ["#4f8fd6", "#d9a441"], lines = [], avgs = [];
+    for (let k = 0; k < 2; k++) {
+      const pts = [], cs = sv.cards[k];
+      for (let i = 0; i < cs.length; i++) { const w = r.norm[k][i]; if (w > 1e-6) pts.push([r.eq[k][i], w]); }
+      const tot = pts.reduce((a, p) => a + p[1], 0);
+      if (!tot) { lines.push(""); avgs.push(null); continue; }
+      pts.sort((a, b) => b[0] - a[0]);
+      let x = 0, d = `M${L},${T + ih * (1 - pts[0][0])}`, avg = 0;
+      for (const [e, w] of pts) { avg += e * w; const x0 = x; x += w / tot; d += `L${L + iw * x0},${T + ih * (1 - e)}L${L + iw * x},${T + ih * (1 - e)}`; }
+      lines.push(d); avgs.push(avg / tot);
+    }
+    const grid = [0, 0.25, 0.5, 0.75, 1].map(v => `<line x1="${L}" x2="${L + iw}" y1="${T + ih * (1 - v)}" y2="${T + ih * (1 - v)}" class="eqgl"/><text x="${L - 6}" y="${T + ih * (1 - v) + 4}" text-anchor="end">${v * 100}%</text>`).join("")
+      + [0, 0.25, 0.5, 0.75, 1].map(v => `<text x="${L + iw * v}" y="${H - 8}" text-anchor="middle">${v * 100}%</text>`).join("");
+    setHTML(box, `<div class="eqgk">${[0, 1].map(k => avgs[k] == null ? "" : `<span><i style="background:${cols[k]}"></i>${esc(sv.spot.names[k])} (${k ? "IP" : "OOP"}) · average ${pct(avgs[k])}</span>`).join("")}</div>
+      <svg viewBox="0 0 ${W} ${H}" class="eqg" role="img" aria-label="Equity graph: each player's hands from strongest to weakest at this spot">${grid}${lines.map((d, k) => d ? `<path d="${d}" fill="none" stroke="${cols[k]}" stroke-width="2.5"/>` : "").join("")}</svg>
+      <p class="note">Each line runs through one player's range at this spot, strongest hand on the left. Read across: at 25% along, a quarter of that range has at least this much equity. A line that stays high has a strong range; a steep drop means a few strong hands and many weak ones.</p>`);
   }
   function renderGrid() {
     const k = gridPlayer(), cells = cellStats(k), r = node.r, nc = sv.cards[k].length, bd = new Set(boardFor(curPath()));
