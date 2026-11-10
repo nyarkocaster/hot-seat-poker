@@ -120,6 +120,13 @@
       </ol>
       <h3>Reading the answer</h3>
       <p>The buttons across the top are the actions available, with how often the whole range takes each one. The grid shows every starting hand: the colors split each hand by action, and the height of the fill shows how much of that hand is still in the range. Tap a hand to see each combination with its equity and expected value. Click an action button to see what happens next, and use the trail above to go back.</p>
+      <h3>Node locking</h3>
+      <p>A solve shows perfect play for both players. Real opponents aren't perfect, so you can <b>lock</b> one player's strategy at a spot and see how the other player should adjust. Go to the decision in the results and press <span class="ui">🔒 Lock this spot</span>.</p>
+      <ul>
+        <li><b>Hand by hand:</b> pick an action and paint the hands that always take it: “this player bets every pair and better and checks the rest”, for example. Hands left grey are still up to the solver. <span class="ui">Start from the solver's choices</span> paints each hand with what it does now, so you can change just a few.</li>
+        <li><b>Whole range:</b> set how often the whole range takes each action, like “never bets”.</li>
+      </ul>
+      <p>Save the lock and press <span class="ui">Solve again</span>. The other player's strategy now answers that exact play, and the start of the results shows how each player's EV changed compared with the solve without locks. You can lock several spots, and they're listed under the Solve button. A lock is skipped, with a note, if you change the spot so its decision no longer exists (for example by changing a bet size). If you solve with the free solver app, get version 1.1 or newer from its download page.</p>
       <p>Under the grid, the <b>Equity graph</b> draws each player's range at the spot you're looking at, strongest hand on the left. A line that stays high means a strong range. A line that starts high and then drops steeply means a few strong hands and many weak ones. Compare the two lines to see who is ahead and where.</p>
       <h3>Following the table</h3>
       <p>While <b>Follow the table</b> is on, the solver moves along with the real hand: checks and bets at the table move it down the matching line, using the closest bet size. When you pick the turn or river in the solver, the table deals that card next, as long as nobody is holding it.</p>
