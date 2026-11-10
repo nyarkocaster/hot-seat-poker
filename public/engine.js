@@ -63,7 +63,7 @@ export function freshGame(lname){
   return {v:3,lname:lname||"",size:6,blinds:{sb:1,bb:2},hand:0,button:0,phase:"idle",toAct:null,turn:0,curBet:0,minRaise:2,
     board:[],board2:null,ritOn:false,ritFrom:0,plan:[null,null,null,null,null],revealAll:false,keepSetup:false,log:[],result:"",
     rules:defaultRules(),straddleNext:false,bombNext:false,bomb:false,rakeTotal:0,handRake:0,deadline:null,clockTurn:null,
-    seats:Array.from({length:9},(_,i)=>({name:NAMES[i],stack:200,uid:null,out:false,pre:[null,null],cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false}))};
+    seats:Array.from({length:9},(_,i)=>({name:NAMES[i],stack:200,uid:null,out:false,pre:[null,null],cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false,open:false}))};
 }
 
 /* position names, in order from the button, for n dealt players */
@@ -102,7 +102,7 @@ export function createEngine(opts={}){
     G.hand++; G.board=[]; G.board2=null; G.ritOn=false; G.ritFrom=0; G.result=""; G.handRake=0; G.bomb=false; G.spots=[]; G.pf=[]; G.line=[];
     G.phase="preflop"; G.curBet=G.blinds.bb; G.minRaise=G.blinds.bb;
     const pre=G.seats.map(s=>s.pre.slice());
-    for(let i=0;i<9;i++){const s=S(i);Object.assign(s,{cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false})}
+    for(let i=0;i<9;i++){const s=S(i);Object.assign(s,{cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false,open:false})}
     for(let i=0;i<G.size;i++) if(ready(i)) S(i).cards=[pre[i][0],pre[i][1]];
     for(let i=0;i<G.size;i++) if(ready(i)) S(i).pre=[null,null];
     for(let i=0;i<G.size;i++) if(ready(i)){const c=S(i).cards;for(let k=0;k<2;k++) if(!c[k]) c[k]=draw()}
@@ -274,7 +274,7 @@ export function createEngine(opts={}){
       case "deal": if(!between()) return false; return startHand();
       case "reset":{const keep=G.seats.map(s=>s.uid);const ln=G.lname,rules=G.rules;G=freshGame(ln);G.rules=rules;G.seats.forEach((s,i)=>{s.uid=keep[i]});return true}
       case "voidhand": if(between()) return false;
-        G.seats.forEach(s=>{s.stack+=s.total;Object.assign(s,{cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false})});
+        G.seats.forEach(s=>{s.stack+=s.total;Object.assign(s,{cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false,open:false})});
         G.board=[];G.board2=null;G.ritOn=false;G.phase="idle";setToAct(null);G.result="";log("Hand cancelled; chips returned");return true;
       case "allstacks":{const v=Math.max(0,n(o.v));G.seats.forEach(s=>{s.stack=v});return true}
       case "name":{const s=seat();if(!s) return false;s.name=String(o.v||"").trim().slice(0,16)||NAMES[o.i];return true}
@@ -283,6 +283,7 @@ export function createEngine(opts={}){
       case "sb": G.blinds.sb=Math.max(0,n(o.v)); return true;
       case "bb": G.blinds.bb=Math.max(1,n(o.v)); return true;
       case "reveal": if(G.revealAll===!!o.v) return false; G.revealAll=!!o.v; log(G.revealAll?"Teacher revealed every hand to students":"Teacher hid the hands again"); return true;
+      case "open":{const s=seat();if(!s||!s.cards||!!s.open===!!o.v) return false;s.open=!!o.v;log(s.open?`Teacher showed ${s.name}'s cards to everyone`:`Teacher hid ${s.name}'s cards again`);return true}
       case "keep": G.keepSetup=!!o.v; return true;
       case "lname": G.lname=String(o.v||"").trim().slice(0,28)||G.lname; return true;
       case "rule": return setRule(G.rules,String(o.k),o.v);
@@ -329,8 +330,8 @@ export function createEngine(opts={}){
       board:G.board,board2:G.board2,result:G.result,log:G.log.slice(-50),reveal:!!G.revealAll,deadline:G.deadline,
       rules:{anteType:r.anteType,ante:r.ante,straddle:r.straddle,straddleAmt:r.straddleAmt,rakePct:r.rakePct,rakeCap:r.rakeCap,nfnd:r.nfnd,rit:r.rit,clock:r.clock,bombAmt:r.bombAmt,solverStudents:r.solverStudents||"between",stoveStudents:r.stoveStudents||"between"},spots:G.spots||[],line:G.line||[],
       straddleNext:G.straddleNext,bombNext:G.bombNext,bomb:G.bomb,handRake:G.handRake,
-      seats:G.seats.map(s=>({name:s.name,stack:s.stack,uid:s.uid,out:s.out,bet:s.bet,total:s.total,folded:s.folded,allin:s.allin,has:!!s.cards,
-        cards:(s.cards&&(G.revealAll||s.shown))?s.cards:null}))};
+      seats:G.seats.map(s=>({name:s.name,stack:s.stack,uid:s.uid,out:s.out,bet:s.bet,total:s.total,folded:s.folded,allin:s.allin,has:!!s.cards,open:!!(s.cards&&s.open),
+        cards:(s.cards&&(G.revealAll||s.shown||s.open))?s.cards:null}))};
   }
   return {get G(){return G}, set G(v){G=v}, history, S, between, used, hostCards, draw, readyCount, slotCard,
     startHand, runOp, applyOp, seatReq, actFor, armClock, pubView, pots};
