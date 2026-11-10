@@ -190,10 +190,11 @@ const UNITS = [
   { id: "notes", title: "Notes", sel: ["#notesPanel"] },
   { id: "odds", title: "Odds calculator", sel: ["#oddsPanel"] },
   { id: "stove", title: "Poker stove", sel: ["#stovePanel"] },
+  { id: "charts", title: "Preflop charts", sel: ["#chartsPanel"] },
 ];
 const DEFAULTS = {
-  both: [["table", "odds", "stove", "log", "side"], ["solver", "notes"]],
-  solver: [["solver"], ["notes", "odds", "stove"]],
+  both: [["table", "odds", "stove", "log", "side"], ["solver", "notes", "charts"]],
+  solver: [["solver"], ["notes", "odds", "stove", "charts"]],
 };
 export function createDock(host) {
   const p = createPalette(host, UNITS, DEFAULTS, "hsp-dock2-", { id: "dock", bodyClass: "docked" });
@@ -207,8 +208,9 @@ export const SOLVER_PARTS = [
   { id: "sizes", title: "Bet sizes", sel: ["#sv-pSizes"] },
   { id: "run", title: "Solve", sel: ["#sv-pRun"] },
   { id: "res", title: "Results", sel: ["#sv-pRes"] },
+  { id: "report", title: "Flop report", sel: ["#sv-pRep"] },
 ];
-export const solverPalette = host => createPalette(host, SOLVER_PARTS, { main: [["spot", "sizes", "run"], ["range", "res"]] }, "hsp-pal-sv3-", { sub: true });
+export const solverPalette = host => createPalette(host, SOLVER_PARTS, { main: [["spot", "sizes", "run", "report"], ["range", "res"]] }, "hsp-pal-sv3-", { sub: true });
 /* inside the Notes window */
 export const notesPalette = (host, before) => createPalette(host, [
   { id: "nbtext", title: "Writing", sel: [() => host.querySelector(".nb-pText")] },
