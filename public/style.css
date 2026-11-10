@@ -362,8 +362,20 @@ body.dragging .dcol{outline:2px dashed var(--line);outline-offset:5px}
 #svPal{container-type:inline-size}
 @container (max-width:640px){.pal.nest{grid-template-columns:minmax(0,1fr)}}
 /* a nested palette with everything in one column uses the full width (the empty column comes back while dragging) */
-body:not(.dragging) .pal.nest:has(> .dcol:empty){grid-template-columns:minmax(0,1fr)}
-body:not(.dragging) .pal.nest > .dcol:empty{display:none}
+body:not(.dragging) .pal.nest:has(> .dside:empty){grid-template-columns:minmax(0,1fr)}
+body:not(.dragging) .pal.nest > .dside:empty{display:none}
+/* the full-width row under the two columns */
+.pal > .dwide{grid-column:1/-1;min-height:0}
+body:not(.dragging) .pal > .dwide:empty{display:none}
+body.dragging .pal > .dwide{min-height:70px}
+body.dragging .pal > .dwide:empty::before{content:"Drop here to use the full width";display:grid;place-items:center;height:70px;color:var(--muted);font-size:12.5px}
+.dk-wide{border:0;background:none;color:var(--muted);font-size:14px;line-height:1;padding:4px 7px;border-radius:6px;cursor:pointer;opacity:0;transition:opacity .15s}
+.dk-h:hover>.dk-wide,.dk-wide:focus-visible,.dk.wide>.dk-h>.dk-wide{opacity:1}
+.dk.wide>.dk-h>.dk-wide{color:var(--brass)}
+.dk-wide:hover{background:color-mix(in srgb,var(--ink) 10%,transparent);color:var(--ink)}
+.dk-wide:focus-visible{outline:2px solid var(--brass);outline-offset:-2px}
+@media (hover:none){.dk-wide{opacity:1}}
+.dk.fold>.dk-h>.dk-wide{display:none}
 .dk.nest{background:color-mix(in srgb,var(--bg) 40%,var(--panel));border-radius:10px}
 .dk.nest>.dk-h{padding:1px 3px;border-radius:10px 10px 0 0}
 .dk.nest.fold>.dk-h{border-radius:10px}
@@ -502,3 +514,12 @@ body:not(.dragging) .pal.nest > .dcol:empty{display:none}
 .dcgrp input[type=url]{flex:1;min-width:220px}
 .dcgrp .field{margin:8px 0}
 .dcok{color:var(--ok)}
+/* flop report: fit narrow windows */
+.repwrap{overflow-x:auto}
+.rep td,.rep th{white-space:normal}
+.rep td.repb{white-space:nowrap}
+.rep .mixbar{min-width:44px}
+.repf td:last-child{width:1%}
+#sv-pRep .fields{grid-template-columns:repeat(auto-fill,minmax(165px,1fr))}
+.rep .b.sm{padding:3px 8px}
+@container (max-width:430px){.rep .repeq{display:none}}

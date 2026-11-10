@@ -592,15 +592,15 @@ export function createSolver(root, opt = {}) {
     rows.forEach(r => { const t = texture(r.b); add(t.hi, r); add(t.suits, r); if (t.paired) add("Paired", r); if (t.conn) add("Connected", r); add("All flops", r); });
     const mean = (l, fn) => { const v = l.map(fn).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
     const order = ["All flops", "Ace-high", "King-high", "Queen-high", "Jack- or ten-high", "Nine-high or lower", "Paired", "Connected", "Monotone", "Two-tone", "Rainbow"];
-    h += `<h3 class="repsub">By kind of flop</h3><table class="brk rep"><tr><th></th><th>Flops</th><th>${esc(n0)} equity</th><th>${esc(n0)} bets</th><th>${esc(n1)} bets after a check</th></tr>` +
+    h += `<h3 class="repsub">By kind of flop</h3><div class="repwrap"><table class="brk rep"><tr><th></th><th>Flops</th><th>${esc(n0)} equity</th><th>${esc(n0)} bets</th><th>${esc(n1)} bets after a check</th></tr>` +
       order.filter(g => groups.has(g)).map(g => { const l = groups.get(g), e = mean(l, r => r.eq && r.eq[0]), b0 = mean(l, r => betShare(r.oop)), b1 = mean(l, r => betShare(r.ip));
-        return `<tr${g === "All flops" ? ' class="tot"' : ""}><td>${g}</td><td>${l.length}</td><td>${e == null ? "–" : pct(e)}</td><td>${b0 == null ? "–" : pct(b0)}</td><td>${b1 == null ? "–" : pct(b1)}</td></tr>`; }).join("") + `</table>`;
+        return `<tr${g === "All flops" ? ' class="tot"' : ""}><td>${g}</td><td>${l.length}</td><td>${e == null ? "–" : pct(e)}</td><td>${b0 == null ? "–" : pct(b0)}</td><td>${b1 == null ? "–" : pct(b1)}</td></tr>`; }).join("") + `</table></div>`;
     // each flop
     const key = { board: r => -Math.max(...r.b.map(c => c >> 2)) * 100 - Math.min(...r.b.map(c => c >> 2)), eq: r => r.eq ? r.eq[0] : 0, b0: r => betShare(r.oop) || 0, b1: r => betShare(r.ip) || 0 }[repSort.k];
     const sorted = rows.slice().sort((a, b) => (key(a) - key(b)) * repSort.d);
-    const th = (k, l) => `<th><button type="button" class="linkbtn" data-rsort="${k}" aria-label="Sort by ${l}">${l}${repSort.k === k ? (repSort.d > 0 ? " ↑" : " ↓") : ""}</button></th>`;
-    h += `<h3 class="repsub">Each flop</h3><table class="brk rep">${`<tr>${th("board", "Flop")}${th("eq", esc(n0) + " eq.")}${th("b0", esc(n0) + " plays")}${th("b1", esc(n1) + " after a check")}<th></th></tr>`}` +
-      sorted.map(r => `<tr><td class="repb">${r.b.map(c => cardsTxt1(c)).join("")}</td><td>${r.eq ? pct(r.eq[0]) : "–"}</td><td>${mixBar(r.oop)}</td><td>${mixBar(r.ip)}</td><td>${canEdit() ? `<button type="button" class="b sm" data-rstudy="${r.b.join(",")}" title="Put this flop in the setup">Study</button>` : ""}</td></tr>`).join("") + `</table>`;
+    const th = (k, l, cls = "") => `<th${cls ? ` class="${cls}"` : ""}><button type="button" class="linkbtn" data-rsort="${k}" aria-label="Sort by ${l}">${l}${repSort.k === k ? (repSort.d > 0 ? " ↑" : " ↓") : ""}</button></th>`;
+    h += `<h3 class="repsub">Each flop</h3><div class="repwrap"><table class="brk rep repf">${`<tr>${th("board", "Flop")}${th("eq", esc(n0) + " eq.", "repeq")}${th("b0", esc(n0) + " plays")}${th("b1", esc(n1) + " after a check")}<th></th></tr>`}` +
+      sorted.map(r => `<tr><td class="repb">${r.b.map(c => cardsTxt1(c)).join("")}</td><td class="repeq">${r.eq ? pct(r.eq[0]) : "–"}</td><td>${mixBar(r.oop)}</td><td>${mixBar(r.ip)}</td><td>${canEdit() ? `<button type="button" class="b sm" data-rstudy="${r.b.join(",")}" title="Put this flop in the setup">Study</button>` : ""}</td></tr>`).join("") + `</table></div>`;
     h += `<div class="row"><button class="b sm" type="button" data-rcopy="1">Copy as a table</button><span class="note">Pastes into a spreadsheet. Hover a bar to see each action's share.</span></div>`;
     setHTML(out, h);
   }

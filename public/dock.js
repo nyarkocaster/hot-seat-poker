@@ -9,13 +9,15 @@ const ZOOMS = [0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.4];
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 
-// units: [{id, title, sel:[css selectors], views?:[...]}]; defaults: {view: [[ids],[ids]]}
+// Under the two columns there's a full-width row: a window moved there (⇔ on its title bar, or dragged
+// below the columns) uses the whole width.
+// units: [{id, title, sel:[css selectors], views?:[...]}]; defaults: {view: [[ids],[ids],[full-width ids]]}
 // key: storage prefix; opt.sub: a palette inside a window; opt.before: put the palette before this element
 export function createPalette(host, units, defaults, key, opt = {}) {
   const dock = document.createElement("div");
   dock.className = "pal" + (opt.sub ? " nest" : ""); dock.hidden = true;
   if (opt.id) dock.id = opt.id;
-  dock.innerHTML = `<div class="dcol" data-col="0"></div><div class="dcol" data-col="1"></div>`;
+  dock.innerHTML = `<div class="dcol dside" data-col="0"></div><div class="dcol dside" data-col="1"></div><div class="dcol dwide" data-col="2"></div>`;
   if (opt.before && opt.before.parentNode === host) host.insertBefore(dock, opt.before); else host.appendChild(dock);
   const cols = [...dock.children];
   const wraps = new Map(); // unit id -> window element
@@ -26,12 +28,17 @@ export function createPalette(host, units, defaults, key, opt = {}) {
   const own = w => w && w.parentElement && w.parentElement.parentElement === dock;
   function layout(v) {
     const saved = lsGet(key + v), d = defaults[v], ok = new Set(unitsFor(v).map(u => u.id));
-    let c = saved && Array.isArray(saved.cols) && saved.cols.length === 2 ? saved.cols.map(l => (Array.isArray(l) ? l.filter(id => ok.has(id)) : [])) : d.map(l => l.slice());
+    let c = saved && Array.isArray(saved.cols) && (saved.cols.length === 2 || saved.cols.length === 3) ? saved.cols.map(l => (Array.isArray(l) ? l.filter(id => ok.has(id)) : [])) : d.map(l => l.slice());
+    while (c.length < 3) c.push([]);
     const seen = new Set();
     c = c.map(l => l.filter(id => (seen.has(id) ? false : (seen.add(id), true))));
-    d.forEach((l, k) => l.forEach(id => { if (!seen.has(id)) { c[k].push(id); seen.add(id); } })); // windows added later
+    d.forEach((l, k) => l.forEach(id => { if (!seen.has(id) && ok.has(id)) { c[k].push(id); seen.add(id); } })); // windows added later
     const z = saved && saved.zoom && typeof saved.zoom === "object" ? saved.zoom : {};
     return { cols: c, fold: new Set(saved && Array.isArray(saved.fold) ? saved.fold : []), zoom: z };
+  }
+  function markWide() {
+    wraps.forEach(w => { const on = w.parentNode === cols[2], b = w.querySelector(":scope > .dk-h .dk-wide"); w.classList.toggle("wide", on);
+      if (b) { b.setAttribute("aria-pressed", String(on)); b.title = on ? "Back to a column" : "Full width"; b.setAttribute("aria-label", (on ? "Put " : "Use the full width for ") + w.querySelector(".dk-t").textContent + (on ? " back in a column" : "")); } });
   }
   function save() {
     if (!view) return;
@@ -54,6 +61,7 @@ export function createPalette(host, units, defaults, key, opt = {}) {
     w.className = "dk" + (opt.sub ? " nest" : ""); w.dataset.dk = u.id;
     w.innerHTML = `<div class="dk-h"><button type="button" class="dk-grip" aria-label="Move the ${u.title} window. Drag, or use the arrow keys." title="Drag to move">⠿</button><span class="dk-t">${u.title}</span>
       <span class="dk-zoom" role="group" aria-label="Size of the ${u.title} window"><button type="button" class="dk-zb" data-z="-1" aria-label="Make ${u.title} smaller" title="Smaller">−</button><button type="button" class="dk-z" data-z="0" title="Back to 100%" aria-label="Reset the size of ${u.title}">100%</button><button type="button" class="dk-zb" data-z="1" aria-label="Make ${u.title} bigger" title="Bigger">+</button></span>
+      <button type="button" class="dk-wide" aria-pressed="false" aria-label="Use the full width for ${u.title}" title="Full width">⇔</button>
       <button type="button" class="dk-fold" aria-expanded="true" aria-label="Fold the ${u.title} window" title="Fold">▾</button></div><div class="dkb"></div>`;
     wraps.set(u.id, w);
     return w;
@@ -78,6 +86,7 @@ export function createPalette(host, units, defaults, key, opt = {}) {
       const L = layout(v); zoom = { ...L.zoom };
       L.cols.forEach((ids, k) => ids.forEach(id => { const u = units.find(x => x.id === id); if (u) cols[k].appendChild(wrapFor(u)); }));
       wraps.forEach((w, id) => { const f = L.fold.has(id); w.classList.toggle("fold", f); w.querySelector(":scope > .dk-h .dk-fold").setAttribute("aria-expanded", String(!f)); applyZoom(w); });
+      markWide();
       dock.hidden = false; if (opt.bodyClass) document.body.classList.add(opt.bodyClass);
     }
     if (!view) return;
@@ -96,8 +105,9 @@ export function createPalette(host, units, defaults, key, opt = {}) {
   let drag = null;
   const ph = document.createElement("div"); ph.className = "dk-ph";
   function placeAt(x, y) {
-    const r0 = cols[0].getBoundingClientRect(), r1 = cols[1].getBoundingClientRect();
-    const col = r1.top >= r0.bottom - 1 ? (y >= r1.top - 10 ? cols[1] : cols[0]) // stacked when there's no room for two
+    const r0 = cols[0].getBoundingClientRect(), r1 = cols[1].getBoundingClientRect(), rw = cols[2].getBoundingClientRect();
+    const col = y >= rw.top - 8 ? cols[2] // below both columns: the full-width row
+      : r1.top >= r0.bottom - 1 ? (y >= r1.top - 10 ? cols[1] : cols[0]) // stacked when there's no room for two
       : (x < (r0.right + r1.left) / 2 ? cols[0] : cols[1]);
     const items = [...col.children].filter(w => w !== drag.w && w !== ph && w.offsetParent !== null);
     const before = items.find(w => { const r = w.getBoundingClientRect(); return y < r.top + r.height / 2; });
@@ -109,7 +119,7 @@ export function createPalette(host, units, defaults, key, opt = {}) {
     if (y < m) window.scrollBy(0, -Math.ceil((m - y) / 4)); else if (y > h - m) window.scrollBy(0, Math.ceil((y - (h - m)) / 4));
   }
   dock.addEventListener("pointerdown", e => {
-    const hd = e.target.closest(".dk-h"); if (!hd || !own(hd.parentElement) || e.button > 0 || e.target.closest(".dk-fold,.dk-zoom")) return;
+    const hd = e.target.closest(".dk-h"); if (!hd || !own(hd.parentElement) || e.button > 0 || e.target.closest(".dk-fold,.dk-zoom,.dk-wide")) return;
     e.stopPropagation();
     const w = hd.parentElement, r = w.getBoundingClientRect();
     e.preventDefault();
@@ -137,7 +147,7 @@ export function createPalette(host, units, defaults, key, opt = {}) {
     if (!d.on) return;
     d.w.removeAttribute("style"); d.w.classList.remove("lift"); document.body.classList.remove("dragging");
     if (cancel || !ph.parentNode) { d.from[0].insertBefore(d.w, d.from[1]); ph.remove(); return; }
-    ph.replaceWith(d.w); save();
+    ph.replaceWith(d.w); markWide(); save();
     d.w.querySelector(":scope > .dk-h .dk-grip").focus({ preventScroll: true });
   }
   dock.addEventListener("pointerup", e => endDrag(e, false));
@@ -152,14 +162,20 @@ export function createPalette(host, units, defaults, key, opt = {}) {
     if (e.key === "ArrowUp" && w.previousElementSibling) col.insertBefore(w, w.previousElementSibling);
     else if (e.key === "ArrowDown" && w.nextElementSibling) col.insertBefore(w.nextElementSibling, w);
     else if ((e.key === "ArrowLeft" && k === 1) || (e.key === "ArrowRight" && k === 0)) cols[1 - k].appendChild(w);
+    else if (k === 2 && (e.key === "ArrowLeft" || e.key === "ArrowRight")) cols[e.key === "ArrowLeft" ? 0 : 1].appendChild(w);
     else return;
-    e.preventDefault(); e.stopPropagation(); g.focus(); save();
+    e.preventDefault(); e.stopPropagation(); g.focus(); markWide(); save();
   });
   dock.addEventListener("click", e => {
-    const b = e.target.closest(".dk-fold,.dk-zoom button"); if (!b) return;
+    const b = e.target.closest(".dk-fold,.dk-zoom button,.dk-wide"); if (!b) return;
     const w = b.closest(".dk"); if (!own(w)) return;
     e.stopPropagation();
-    if (b.classList.contains("dk-fold")) {
+    if (b.classList.contains("dk-wide")) {
+      // into the full-width row, or back to the shorter column
+      if (w.parentNode === cols[2]) (cols[0].offsetHeight <= cols[1].offsetHeight ? cols[0] : cols[1]).appendChild(w);
+      else cols[2].appendChild(w);
+      markWide(); b.focus({ preventScroll: true });
+    } else if (b.classList.contains("dk-fold")) {
       const f = !w.classList.contains("fold");
       w.classList.toggle("fold", f); b.setAttribute("aria-expanded", String(!f)); b.setAttribute("aria-label", (f ? "Unfold" : "Fold") + " the " + w.querySelector(".dk-t").textContent + " window");
     } else {
@@ -210,7 +226,7 @@ export const SOLVER_PARTS = [
   { id: "res", title: "Results", sel: ["#sv-pRes"] },
   { id: "report", title: "Flop report", sel: ["#sv-pRep"] },
 ];
-export const solverPalette = host => createPalette(host, SOLVER_PARTS, { main: [["spot", "sizes", "run", "report"], ["range", "res"]] }, "hsp-pal-sv3-", { sub: true });
+export const solverPalette = host => createPalette(host, SOLVER_PARTS, { main: [["spot", "sizes"], ["range"], ["run", "res", "report"]] }, "hsp-pal-sv4-", { sub: true });
 /* inside the Notes window */
 export const notesPalette = (host, before) => createPalette(host, [
   { id: "nbtext", title: "Writing", sel: [() => host.querySelector(".nb-pText")] },
