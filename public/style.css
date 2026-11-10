@@ -186,7 +186,7 @@ body.v-both #game{grid-template-columns:minmax(0,1fr)}
 body.docked #duo{display:block}
 body.docked #game,body.docked #solverPane{display:none!important}
 #dock{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}
-body.v-solver #dock{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}
+body.v-solver #dock{grid-template-columns:minmax(0,7fr) minmax(0,5fr)}
 @media (max-width:1100px){#dock,body.v-solver #dock{grid-template-columns:minmax(0,1fr)}}
 .dcol{display:flex;flex-direction:column;gap:14px;min-height:140px;border-radius:12px;min-width:0}
 body.dragging,body.dragging *{cursor:grabbing!important;user-select:none;-webkit-user-select:none}
@@ -350,3 +350,38 @@ body.dragging .dcol{outline:2px dashed var(--line);outline-offset:5px}
 @media (max-width:600px){.pollcard{right:8px;left:8px;bottom:8px;width:auto}}
 .snote{font-weight:400;font-size:12px}
 .toolsmenu .toggle input:disabled+span{opacity:.6}
+
+/* windows inside a window (solver and notes parts) */
+.pal{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+.pal.sub{gap:10px;padding:10px}
+#svPal{container-type:inline-size}
+@container (max-width:760px){.pal.sub{grid-template-columns:minmax(0,1fr)}}
+.dk.sub{background:color-mix(in srgb,var(--bg) 40%,var(--panel));border-radius:10px}
+.dk.sub>.dk-h{padding:1px 3px;border-radius:10px 10px 0 0}
+.dk.sub.fold>.dk-h{border-radius:10px}
+.dk.sub>.dk-h .dk-t{font-size:11.5px}
+.dk-zoom{display:inline-flex;align-items:center;gap:0;opacity:0;transition:opacity .15s}
+.dk-h:hover>.dk-zoom,.dk-zoom:focus-within,.dk-zoom:has(.dk-z.on){opacity:1}
+@media (hover:none){.dk-zoom{opacity:1}}
+.dk-zoom button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:13px;padding:3px 6px;border-radius:5px;line-height:1}
+.dk-zoom button:hover:not(:disabled){background:color-mix(in srgb,var(--ink) 10%,transparent);color:var(--ink)}
+.dk-zoom button:disabled{opacity:.35;cursor:default}
+.dk-zoom .dk-z{font-size:11px;min-width:40px;font-variant-numeric:tabular-nums}
+.dk-zoom .dk-z.on{color:var(--brass)}
+.dk-zoom button:focus-visible{outline:2px solid var(--brass);outline-offset:-2px}
+.dk.fold>.dk-h>.dk-zoom{display:none}
+/* a little smaller range charts */
+.rgrid{max-width:460px}
+.rgrid.res{max-width:620px}
+.nbgrid{max-width:420px}
+.dkb .rc{font-size:clamp(8px,2.2cqw,11px)}
+.nbsub{display:flex;flex-direction:column;gap:8px}
+.dkb>.nbsub{padding:10px 12px}
+/* equity graph */
+.eqgd{margin-top:12px;border-top:1px solid var(--line);padding-top:8px}
+.eqgd summary{cursor:pointer;font-weight:600;font-size:13.5px}
+.eqg{width:100%;max-width:620px;height:auto;display:block;margin-top:6px}
+.eqg text{font-size:11px;fill:var(--muted);font-family:var(--f-body)}
+.eqgl{stroke:var(--line);stroke-width:1}
+.eqgk{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;margin-top:6px}
+.eqgk i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
