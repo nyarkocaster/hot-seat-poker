@@ -12,6 +12,8 @@ input[type=text]{width:100%}
 .boardrow .pc.slot{border-color:var(--line);color:var(--muted)}
 .sdeck .pc.cur{outline:3px solid var(--brass);outline-offset:-1px}
 .sdeck{margin-bottom:12px}
+.boardline{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin-bottom:8px}
+.boardline .boardrow{margin-bottom:0}
 
 /* 13x13 hand grid */
 .rgrid{display:grid;grid-template-columns:repeat(13,minmax(0,1fr));gap:2px;user-select:none;-webkit-user-select:none;touch-action:none;margin:8px 0}
