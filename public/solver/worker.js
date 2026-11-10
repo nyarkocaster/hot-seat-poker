@@ -1,5 +1,5 @@
 // Runs the solver off the main page so the page stays responsive.
-// Messages in: load {mt}, setup {spot}, solve {compress, target, maxIter}, stop, node {hist}.
+// Messages in: load {mt}, setup {spot}, solve {compress, target, maxIter, locks}, stop, node {hist}.
 let mod = null, S = null, stopping = false, sizes = [0, 0];
 
 const post = (m, transfer) => postMessage(m, transfer || []);
@@ -27,9 +27,14 @@ function setup(sp) {
   post({ t: "setup", mem: [S.memory_usage(false), S.memory_usage(true)], cards: [c0, c1] });
 }
 
-async function solve({ compress, target, maxIter }) {
+async function solve({ compress, target, maxIter, locks }) {
   stopping = false;
   S.allocate_memory(compress);
+  // node locks: [{hist, s, acts}]; report each one ("" = set)
+  if (locks && locks.length) {
+    if (typeof S.lock_at !== "function") post({ t: "locks", res: locks.map(() => "this page needs a refresh to use locks") });
+    else post({ t: "locks", res: locks.map(l => S.lock_at(Uint32Array.from(l.hist), Float32Array.from(l.s), l.acts)) });
+  }
   post({ t: "progress", i: 0, e: null });
   let i = 0, e = Infinity, last = 0;
   for (; i < maxIter; i++) {
