@@ -15,7 +15,7 @@ const lobbyStub=(env,id)=>env.LOBBY.get(env.LOBBY.idFromName(id));
 const dirStub=env=>env.DIRECTORY.get(env.DIRECTORY.idFromName("main"));
 const MAX_LOBBIES=200, MAX_SOCKETS=80;
 // keys a shared-solver patch may contain (see public/solver/core.js)
-const SV_KEYS=new Set(["spot","link","sync","status","host","hostName","where","threads","prog","info","cards","solved","path","solveId","err","mem"]);
+const SV_KEYS=new Set(["spot","link","sync","status","host","hostName","where","threads","prog","info","cards","solved","path","solveId","err","mem","locks","base"]);
 
 export default {
   async fetch(req,env){
