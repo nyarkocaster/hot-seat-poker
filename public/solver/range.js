@@ -129,3 +129,36 @@ export function guessRanges(spot) {
 
 // Store presets in the solver's own spelling (descending dash ranges, e.g. JTo-J8o).
 for (const k in PRESETS) PRESETS[k] = formatRange(parseRange(PRESETS[k]).w);
+
+/* ---------- preflop charts: the presets above, as edited by a teacher, plus charts of their own ----------
+   PRESETS always holds the charts in use right now: the built-in ones (edited or not) and then any
+   custom ones. A lobby sends its charts to everyone in it; outside a lobby this device's charts apply. */
+export const DEFAULT_PRESETS = Object.freeze({ ...PRESETS });
+export const BUILTIN = Object.keys(DEFAULT_PRESETS);
+const escH = t => String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+let overlay = {};
+export const chartName = n => String(n || "").replace(/\s+/g, " ").trim().slice(0, 40);
+export function cleanCharts(map) {
+  const out = {};
+  if (!map || typeof map !== "object" || Array.isArray(map)) return out;
+  for (const [k, v] of Object.entries(map).slice(0, 80)) {
+    const name = chartName(k); if (!name || typeof v !== "string") continue;
+    const r = parseRange(v); if (r.err) continue;
+    const t = formatRange(r.w);
+    if (DEFAULT_PRESETS[name] !== undefined && t === DEFAULT_PRESETS[name]) continue; // same as the default
+    out[name] = t;
+  }
+  return out;
+}
+export function applyCharts(map) {
+  overlay = cleanCharts(map);
+  for (const k of Object.keys(PRESETS)) delete PRESETS[k];
+  Object.assign(PRESETS, DEFAULT_PRESETS, overlay);
+  if (typeof dispatchEvent === "function" && typeof CustomEvent === "function") dispatchEvent(new CustomEvent("hsp-charts"));
+}
+export const chartOverlay = () => ({ ...overlay });
+export const presetOptions = () => Object.keys(PRESETS).map(k => `<option>${escH(k)}</option>`).join("");
+// this device's own charts (what a teacher last saved), used outside a lobby
+export function deviceCharts() { try { return cleanCharts(JSON.parse(localStorage.getItem("hsp-charts") || "{}")); } catch (e) { return {}; } }
+export function saveDeviceCharts(map) { try { localStorage.setItem("hsp-charts", JSON.stringify(cleanCharts(map))); } catch (e) {} }
+if (typeof localStorage !== "undefined") { try { applyCharts(deviceCharts()); } catch (e) {} }
