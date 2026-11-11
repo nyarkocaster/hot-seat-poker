@@ -12,14 +12,17 @@ if(/^#lobby-/.test(location.hash)) location.replace("/play/"+location.hash);
 try{var t=localStorage.getItem("hsp-theme");document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){}
 </script>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="apple-touch-icon" href="/brand/icon-180.png">
+<meta property="og:image" content="https://hotseatpoker.com/brand/share.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1B4D38">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/site.css">
 </head>
 <body>
 <div class="site">
   <nav class="nav" aria-label="Site">
-    <a class="brand" href="/">Hot Seat Poker</a>
+    <a class="brand" href="/"><img class="mark" src="/brand/mark.svg" alt="" width="18" height="22">Hot Seat Poker</a>
     <a href="/learn/">How it works</a>
     <a href="/solver/">Solver</a>
     <a class="b primary" href="/play/">Open the table</a>
@@ -29,6 +32,7 @@ try{var t=localStorage.getItem("hsp-theme");document.documentElement.dataset.the
     <div class="felt-table" role="img" aria-label="A poker table with a teacher and three students; the flop is Q of spades, J of hearts, 2 of hearts">
       <div class="rail"></div><div class="felt"></div><div class="line"></div>
       <div class="printed">
+        <img class="hero-mark" src="/brand/mark.svg" alt="" width="60" height="74">
         <h1>Hot Seat Poker</h1>
         <p>A live poker table for teaching. You set every card; your students take a seat and play.</p>
       </div>

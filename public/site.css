@@ -15,21 +15,21 @@ a.b.primary{color:#fff}
 /* hero: the felt, with the name printed on it */
 .hero{padding:10px 0 40px}
 .felt-table{position:relative;aspect-ratio:2.15/1;max-width:1040px;margin:0 auto;container-type:inline-size}
-.felt-table .rail{position:absolute;inset:0;border-radius:999px;background:var(--rail);box-shadow:0 18px 50px rgba(0,0,0,.35),inset 0 0 0 2px rgba(255,255,255,.04)}
-.felt-table .felt{position:absolute;inset:3.2cqw;border-radius:999px;background:radial-gradient(ellipse at 50% 42%,#226148 0%,var(--felt) 52%,var(--felt-edge) 100%);box-shadow:inset 0 0 40px rgba(0,0,0,.35)}
-.felt-table .line{position:absolute;inset:8.5cqw;border-radius:999px;border:1.5px solid rgba(233,243,236,.16)}
-.printed{position:absolute;left:50%;top:21%;transform:translateX(-50%);text-align:center;color:rgba(233,243,236,.9);width:62%}
-.printed h1{font-family:var(--f-display);font-weight:700;font-size:max(30px,6.6cqw);line-height:.95;letter-spacing:.06em;margin:0;text-shadow:0 2px 0 rgba(0,0,0,.25)}
-.printed p{font-size:max(14px,1.75cqw);margin:1.2cqw 0 0;color:rgba(233,243,236,.75);line-height:1.4}
+.felt-table .rail{position:absolute;inset:0;border-radius:999px;background:var(--rail)}
+.felt-table .felt{position:absolute;inset:.6cqw;border-radius:999px;background:var(--felt)}
+.felt-table .line{position:absolute;inset:5cqw;border-radius:999px;border:1.5px solid #2f6a51}
+.printed{position:absolute;left:50%;top:12%;transform:translateX(-50%);text-align:center;color:var(--felt-ink);width:62%}
+.printed h1{font-family:var(--f-display);font-weight:700;font-size:max(30px,6.6cqw);line-height:.95;letter-spacing:.06em;margin:0}
+.printed p{font-size:max(14px,1.75cqw);margin:1.2cqw 0 0;color:#cfdcd3;line-height:1.4}
 .hero-board{position:absolute;left:50%;top:60%;transform:translate(-50%,-50%);display:flex;gap:1.1cqw}
 .hero-board .pc{width:max(30px,5.2cqw);height:max(42px,7.3cqw);border-radius:.7cqw}
 .hero-board .pc .r{font-size:max(15px,2.9cqw)}.hero-board .pc .s{font-size:max(13px,2.3cqw)}
-.hero-board .pc.slot{border-color:rgba(233,243,236,.22)}
-.hplate{position:absolute;transform:translate(-50%,-50%);background:rgba(15,21,18,.86);border:1px solid rgba(233,243,236,.14);border-radius:9px;padding:.5cqw 1.2cqw;text-align:center;color:var(--felt-ink);white-space:nowrap;font-size:max(11px,1.25cqw);line-height:1.3}
+.hero-board .pc.slot{border-color:#4f8a70}
+.hplate{position:absolute;transform:translate(-50%,-50%);background:#14201a;border:1px solid #2f6a51;border-radius:9px;padding:.5cqw 1.2cqw;text-align:center;color:var(--felt-ink);white-space:nowrap;font-size:max(11px,1.25cqw);line-height:1.3}
 .hplate b{display:block;font-family:var(--f-display);font-size:max(13px,1.6cqw);letter-spacing:.03em}
-.hplate span{color:rgba(233,243,236,.6)}
-.hplate.teach{border-color:var(--brass)}
-.hplate.teach span{color:var(--brass)}
+.hplate span{color:#a9bcb0}
+.hplate.teach{border-color:var(--gold)}
+.hplate.teach span{color:var(--gold)}
 .hero-cta{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-top:28px}
 @media (prefers-reduced-motion:no-preference){
   .hero-board .pc.deal{animation:deal .45s cubic-bezier(.2,.8,.2,1) both}
@@ -74,3 +74,8 @@ a.b.primary{color:#fff}
 .doc kbd,.doc .ui{font:600 13px/1 var(--f-body);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 6px;white-space:nowrap}
 .doc dl dt{font-weight:600;margin-top:14px}
 .doc dl dd{margin:4px 0 0;color:var(--muted);line-height:1.6}
+
+/* the logo */
+.nav .brand{display:inline-flex;align-items:center}
+.hero-mark{display:block;width:max(26px,3.6cqw);height:auto;margin:0 auto .9cqw}
+@media (max-width:640px){.hero-mark{display:none}}

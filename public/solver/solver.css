@@ -24,7 +24,7 @@ input[type=text]{width:100%}
 .rc .fill{position:absolute;left:0;right:0;bottom:0;background:var(--brass);opacity:.85}
 .rc .bars{position:absolute;left:0;right:0;bottom:0;display:flex}
 .rc .bars i{display:block;height:100%}
-.rc span{position:relative;z-index:1;text-shadow:0 0 3px var(--bg),0 0 2px var(--bg)}
+.rc span{position:relative;z-index:1;font-weight:600}
 .rc.sel{outline:2px solid var(--ink);outline-offset:-2px}
 .rc.empty{opacity:.45}
 .paint{margin:4px 0 10px}
