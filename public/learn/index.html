@@ -31,6 +31,8 @@
         <li><a href="#setup">Set up the table</a></li>
         <li><a href="#cards">Choose the cards</a></li>
         <li><a href="#play">Play a hand</a></li>
+        <li><a href="#bots">Computer players</a></li>
+        <li><a href="#solo">Solo practice</a></li>
         <li><a href="#teaching">Teaching tools</a></li>
         <li><a href="#tools">Odds calculator and poker stove</a></li>
         <li><a href="#solver">Study a spot in the solver</a></li>
@@ -43,7 +45,7 @@
     <article class="doc">
       <h1>How it works</h1>
       <p class="lede">Hot Seat Poker is a live table for teaching. The teacher controls the cards and the game; students sit in seats and make their own decisions. This guide walks through a study session from start to finish.</p>
-      <div class="tip">Want to look around first? On the table page, choose <span class="ui">Open practice table</span>. It runs on your device only, with every seat yours to play.</div>
+      <div class="tip">Want to look around first? On the table page, choose <span class="ui">Open practice table</span>. It runs on your device only, with every seat yours to play. Switch it to <span class="ui">Student view</span> to play one seat against computer players.</div>
 
       <h2 id="start">Start a lobby</h2>
       <p>A lobby is one table that stays open between sessions. Its cards, stacks and settings are saved, so you can pick up next week where you stopped.</p>
@@ -96,6 +98,20 @@
         <li>At showdown the pot is paid out, rake is taken if it's on, and the hand log records everything.</li>
       </ol>
       <p>Made a mistake? <span class="ui">Undo</span> steps back one action at a time. <span class="ui">Cancel this hand</span> (in Table setup) returns every chip to where it was before the deal.</p>
+
+      <h2 id="bots">Computer players</h2>
+      <p>Any seat without a student can be a computer player (a bot). In <span class="ui">Seats</span>, pick a player type from the seat's menu. The bot acts by itself after a short pause, and students see its type on the table, so they can practise adjusting to it. A student can't take a bot's seat until you set it back to <span class="ui">Open seat</span>. Bots that go broke buy back in for 100 big blinds at the next deal.</p>
+      <dl>
+        <dt>Balanced</dt><dd>GTO-style play: opens by position, defends about as often as the price says, and bluffs in proportion to its bets. It's a rule-based approximation, not a solved strategy, so use the solver for exact answers.</dd>
+        <dt>Nit, TAG, LAG</dt><dd>Very tight, solid tight-aggressive, and loose-aggressive regulars.</dd>
+        <dt>Calling station, Maniac, Weak-passive fish</dt><dd>The classic leaks: calls too much, raises and bluffs too much, or limps and gives up when it misses.</dd>
+        <dt>Custom</dt><dd>Five sliders: how many hands it plays (VPIP), how many it raises first (PFR), aggression with good hands, how often it bluffs, and how readily it folds when bet into.</dd>
+      </dl>
+      <p>Bots only use what a real player in their seat would know: their own cards, the board, and the betting so far. Pressing <span class="ui">Undo</span> on a bot's action lets it decide again.</p>
+
+      <h2 id="solo">Solo practice</h2>
+      <p>The practice table has two views, switched at the top of its panel. <span class="ui">Teacher view</span> works as before: you see and set every card and can act for any seat. <span class="ui">Student view</span> puts you in one seat against computer players. You see only your own cards until showdown, new hands deal themselves a few seconds after the last one (turn this off with <span class="ui">Deal the next hand automatically</span>), and the solver, stove and odds calculator only know what you can see.</p>
+      <p>In Student view, choose your seat, how many players, and each opponent's type. <span class="ui">Make everyone</span> sets the whole table at once, including a random mix. If you run out of chips, press <span class="ui">Rebuy</span>.</p>
 
       <h2 id="teaching">Teaching tools</h2>
       <dl>

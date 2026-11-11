@@ -5,6 +5,7 @@
 import {DurableObject} from "cloudflare:workers";
 import {createEngine,freshGame} from "../public/engine.js";
 import {applyNotesPatch,normalizeNotebook} from "../public/notes.js";
+import {decide as botDecide,thinkMs} from "../public/bots.js";
 
 const json=(o,s=200)=>new Response(JSON.stringify(o),{status:s,headers:{"content-type":"application/json","cache-control":"no-store"}});
 const rid=n=>{const al="abcdefghjkmnpqrstuvwxyz23456789";const a=new Uint32Array(n);crypto.getRandomValues(a);return [...a].map(x=>al[x%al.length]).join("")};
@@ -205,9 +206,12 @@ export class Lobby extends DurableObject{
   async commit(){
     const E=this.E;
     if(E.history.length>40) E.history.splice(0,E.history.length-40);
-    const dl=E.armClock(Date.now());
+    const now=Date.now(), dl=E.armClock(now);
     await this.ctx.storage.put({g:E.G,hist:E.history});
-    if(dl) await this.ctx.storage.setAlarm(dl); else await this.ctx.storage.deleteAlarm();
+    // a computer player is up: it acts after a short pause (on the alarm, like the shot clock)
+    const bt=this.botTurn()?now+thinkMs(E.G):null; this.botAt=bt;
+    const at=bt&&dl?Math.min(bt,dl):(bt||dl);
+    if(at) await this.ctx.storage.setAlarm(at); else await this.ctx.storage.deleteAlarm();
     this.broadcastState(); this.broadcastPeers(); await this.dirUpdate();
   }
   async dirUpdate(force){
@@ -391,9 +395,16 @@ export class Lobby extends DurableObject{
     this.broadcastPeers(); await this.dirUpdate();
   }
   async webSocketError(ws){await this.webSocketClose(ws)}
+  botTurn(){const G=this.E.G;return !!(G&&G.toAct!=null&&["preflop","flop","turn","river"].includes(G.phase)&&G.seats[G.toAct]&&G.seats[G.toAct].bot)}
   async alarm(){
     const E=this.E; if(!E.G) return;
     const G=E.G;
+    if(this.botTurn()){
+      if(this.botAt&&Date.now()<this.botAt-50){await this.ctx.storage.setAlarm(this.botAt);return}
+      const i=G.toAct; let d; try{d=botDecide(G,i)}catch(e){d={a:"fold"}}
+      if(!E.runOp({t:"act",seat:i,a:d.a,amt:d.amt})&&!E.runOp({t:"act",seat:i,a:"check"})) E.runOp({t:"act",seat:i,a:"fold"});
+      await this.commit(); return;
+    }
     if(G.toAct==null||!G.deadline) return;
     if(Date.now()<G.deadline-250){await this.ctx.storage.setAlarm(G.deadline);return}
     if(E.runOp({t:"timeout",turn:G.turn})) await this.commit();

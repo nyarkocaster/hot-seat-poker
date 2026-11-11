@@ -544,3 +544,17 @@ body.in-discord .dkb > .table{max-width:min(100% - 28px,calc((100dvh - 230px) * 
 
 /* the logo next to the name */
 .mark{display:inline-block;height:.82em;width:auto;vertical-align:-.06em;margin-right:.32em}
+/* computer players and the practice table's student view */
+.soloswitch{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0 0 10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.soloswitch .note{margin:0}
+.srow .ops select[data-bot]{max-width:190px}
+.srow.bot .nm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bpgrid{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 12px;padding:6px 2px 0}
+.bp{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--muted)}
+.bp b{color:var(--ink,inherit);font-weight:600}
+.bp input[type=range]{width:100%}
+details.types{margin-top:6px}
+details.types summary{cursor:pointer;color:var(--gold,var(--brass));font-weight:600}
+details.types dl{margin:6px 0 0}
+details.types dt{font-weight:600;color:var(--ink,inherit)}
+details.types dd{margin:0 0 6px}

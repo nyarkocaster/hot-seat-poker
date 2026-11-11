@@ -5,6 +5,7 @@ export const RANKS="23456789TJQKA", SUITS="shdc", SYM={s:"♠",h:"♥",d:"♦",c
 export const FULL=[]; for(const r of RANKS) for(const s of SUITS) FULL.push(r+s);
 export const NAMES=["Dana","Luis","Priya","Marcus","Jen","Theo","Ana","Ray","Kim"];
 export const STREETS={idle:"Between hands",preflop:"Preflop",flop:"Flop",turn:"Turn",river:"River",done:"Hand over"};
+export const BOT_KEYS=["balanced","nit","tag","lag","station","maniac","fish","custom"];
 export const money=n=>"$"+(Math.round(n*100)/100).toLocaleString("en-US");
 export const clone=o=>JSON.parse(JSON.stringify(o));
 export function pretty(c){return c[0].replace("T","10")+SYM[c[1]]}
@@ -64,7 +65,7 @@ export function freshGame(lname){
   return {v:3,lname:lname||"",size:6,blinds:{sb:1,bb:2},hand:0,button:0,phase:"idle",toAct:null,turn:0,curBet:0,minRaise:2,
     board:[],board2:null,ritOn:false,ritFrom:0,plan:[null,null,null,null,null],revealAll:false,keepSetup:false,log:[],result:"",
     rules:defaultRules(),straddleNext:false,bombNext:false,bomb:false,rakeTotal:0,handRake:0,deadline:null,clockTurn:null,
-    seats:Array.from({length:9},(_,i)=>({name:NAMES[i],stack:200,uid:null,out:false,pre:[null,null],cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false,open:false}))};
+    seats:Array.from({length:9},(_,i)=>({name:NAMES[i],stack:200,uid:null,out:false,pre:[null,null],cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false,open:false,bot:null,bp:null}))};
 }
 
 /* position names, in order from the button, for n dealt players */
@@ -97,6 +98,8 @@ export function createEngine(opts={}){
   function setToAct(i){G.toAct=i;G.turn=(G.turn||0)+1}
 
   function startHand(){
+    // computer players who went broke buy back in for 100 big blinds
+    for(let i=0;i<G.size;i++){const s=S(i);if(s.bot&&!s.out&&s.stack<=0){s.stack=G.blinds.bb*100;log(`${label(i)} rebuys for ${money(s.stack)}`)}}
     const ready=readySeat, n=readyCount(), r=G.rules;
     if(n<2){msg("Need at least two seated players with chips.");return false}
     if(G.hand>0||!ready(G.button)) G.button=nextSeat(G.button,ready);
@@ -298,6 +301,12 @@ export function createEngine(opts={}){
         log(`${label(i)} ran out of time`); return act(i,toCall>0?"fold":"check",0);
       }
       case "act": return act(n(o.seat),String(o.a),Number(o.amt)||0);
+      case "bot":{const s=seat();if(!s) return false;const v=o.v==null||o.v===""?null:String(o.v);
+        if(v&&!BOT_KEYS.includes(v)) return false; if(v&&s.uid) return false;
+        if(o.p&&typeof o.p==="object"){const q={};for(const k of ["vpip","pfr","agg","bluff","fold"]){const x=Math.round(+o.p[k]);if(Number.isFinite(x)) q[k]=Math.max(0,Math.min(100,x))}
+          if(q.vpip!=null&&q.pfr!=null&&q.pfr>q.vpip) q.pfr=q.vpip; s.bp={...(s.bp||{}),...q}}
+        if((s.bot||null)===v&&!o.p) return false;
+        s.bot=v; if(v) s.out=false; return true}
     }
     return false;
   }
@@ -312,7 +321,7 @@ export function createEngine(opts={}){
   function seatReq(uid,name,want){
     const cur=G.seats.findIndex(s=>s.uid===uid);
     if(want===-1){if(cur<0) return false;G.seats[cur].uid=null;log(`${G.seats[cur].name} left seat ${cur+1}`);return true}
-    if(!Number.isInteger(want)||want<0||want>=G.size||want===cur||G.seats[want].uid) return false;
+    if(!Number.isInteger(want)||want<0||want>=G.size||want===cur||G.seats[want].uid||G.seats[want].bot) return false;
     if(cur>=0) G.seats[cur].uid=null;
     const s=G.seats[want]; s.uid=uid; if(name) s.name=String(name).slice(0,16); s.out=false;
     log(`${s.name} took seat ${want+1}`); return true;
@@ -331,7 +340,7 @@ export function createEngine(opts={}){
       board:G.board,board2:G.board2,result:G.result,log:G.log.slice(-50),reveal:!!G.revealAll,deadline:G.deadline,
       rules:{anteType:r.anteType,ante:r.ante,straddle:r.straddle,straddleAmt:r.straddleAmt,rakePct:r.rakePct,rakeCap:r.rakeCap,nfnd:r.nfnd,rit:r.rit,clock:r.clock,bombAmt:r.bombAmt,solverStudents:r.solverStudents||"always",stoveStudents:r.stoveStudents||"always",oddsStudents:r.oddsStudents||"always",chartsStudents:r.chartsStudents||"always"},spots:G.spots||[],line:G.line||[],
       straddleNext:G.straddleNext,bombNext:G.bombNext,bomb:G.bomb,handRake:G.handRake,
-      seats:G.seats.map(s=>({name:s.name,stack:s.stack,uid:s.uid,out:s.out,bet:s.bet,total:s.total,folded:s.folded,allin:s.allin,has:!!s.cards,open:!!(s.cards&&s.open),
+      seats:G.seats.map(s=>({name:s.name,stack:s.stack,uid:s.uid,out:s.out,bet:s.bet,total:s.total,folded:s.folded,allin:s.allin,has:!!s.cards,open:!!(s.cards&&s.open),bot:s.bot||null,
         cards:(s.cards&&(G.revealAll||s.shown||s.open))?s.cards:null}))};
   }
   return {get G(){return G}, set G(v){G=v}, history, S, between, used, hostCards, draw, readyCount, slotCard,

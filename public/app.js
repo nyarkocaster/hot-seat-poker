@@ -1,10 +1,11 @@
 // Hot Seat Poker page: lobby list, table, teacher controls, live connection to the lobby server.
-import {createEngine,freshGame,RANKS,SYM,STREETS,money,pretty} from "./engine.js";
+import {createEngine,freshGame,RANKS,SYM,STREETS,NAMES,money,pretty} from "./engine.js";
 import {createSolver} from "./solver/core.js";
 import {createDock,solverPalette,notesPalette} from "./dock.js";
 import {createNotes} from "./notes.js";
 import {createOdds,createStove} from "./tools.js";
 import {createCharts} from "./charts.js";
+import {BOT_TYPES,BOT_ORDER,botLabel,decide as botDecide,thinkMs} from "./bots.js";
 
 const $=s=>document.querySelector(s);
 const esc=t=>String(t==null?"":t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -37,7 +38,11 @@ function forgetCode(id){const c=codes();delete c[id];lsSet("hsp-codes",c)}
 const pws=()=>lsGet("hsp-pws")||{};
 function savePw(id,pw){const c=pws();if(pw) c[id]=pw; else delete c[id];lsSet("hsp-pws",c)}
 let pwFor=null, pendingHash=false;
-const isT=()=>ROLE==="teacher"&&!!E.G;
+// practice table: "teacher" view sees and sets every card; "student" view plays one seat against computer players
+let SOLO=Object.assign({view:"teacher",seat:0,auto:true},lsGet("hsp-solo")||{});
+const saveSolo=()=>lsSet("hsp-solo",SOLO);
+const soloStu=()=>mode==="local"&&SOLO.view==="student"&&!!E.G;
+const isT=()=>ROLE==="teacher"&&!!E.G&&!soloStu();
 
 function connect(){
   clearTimeout(retryT); if(!L||!wantWs) return;
@@ -232,7 +237,7 @@ function enterLobby(id,role,code){
   setHash("lobby-"+id); updateConn(); render();
 }
 function leaveLobby(quiet){
-  wantWs=false; clearTimeout(retryT); clearInterval(pingT); clearTimeout(localClockT);
+  wantWs=false; clearTimeout(retryT); clearInterval(pingT); clearTimeout(localClockT); clearTimeout(botT); botKey=""; clearTimeout(dealT); dealT=null;
   if(ws){try{ws.close()}catch(e){}} ws=null; wsOpen=false;
   mode=null; ROLE=null; L=null; TCODE=""; PUB=null; MINE=null; HIST=0; peers=[]; myPeer=null; curs.clear(); welcomed=false;
   E.G=null; E.history.length=0; picker=null; sideTab="seats"; confirmReset=false; myBusy="[]"; unmountSolver(); svOn=false;
@@ -240,7 +245,9 @@ function leaveLobby(quiet){
 }
 function enterLocal(){
   leaveLobby(true); mode="local"; ROLE="teacher"; L={id:"",name:"Practice table"};
-  E.G=freshGame("Practice table"); E.G.seats[0].pre=["As","Kh"]; E.startHand(); E.history.length=0;
+  E.G=freshGame("Practice table");
+  if(SOLO.view==="student"){SOLO.seat=Math.min(SOLO.seat|0,E.G.size-1);fillBots()} else E.G.seats[0].pre=["As","Kh"];
+  E.startHand(); E.history.length=0;
   mountSolver(); updateConn(); render();
 }
 function sendOp(op){
@@ -300,7 +307,9 @@ function cardHTML(c,opts={}){
   if(!c) return `<${tag} class="pc slot${opts.cls?" "+opts.cls:""}"${attrs} aria-label="${opts.empty||"Empty card slot"}">${opts.plus?'<span class="s">+</span>':""}</${tag}>`;
   return `<${tag} class="pc ${c[1]}${opts.cls?" "+opts.cls:""}"${attrs} aria-label="${pretty(c)}"><span class="r">${c[0]==="T"?"10":c[0]}</span><span class="s">${SYM[c[1]]}</span></${tag}>`;
 }
-function view(){return isT()?pubLike():PUB}
+function view(){return isT()?pubLike():soloStu()?soloView():PUB}
+// what a player in the practice seat would see: their own cards, everyone else's only when shown
+function soloView(){const p=E.pubView(),me=SOLO.seat,s=E.G.seats[me];if(s&&s.cards&&p.seats[me]) p.seats[me].cards=s.cards;p.rakeTotal=E.G.rakeTotal||0;return p}
 function pubLike(){const p=E.pubView();p.seats=E.G.seats.map((s,i)=>({...p.seats[i],cards:s.cards,pre:s.pre}));p.plan=E.G.plan;p.rakeTotal=E.G.rakeTotal||0;return p}
 let mySeat=-1, pointerDown=false, renderPending=false;
 const lastHTML=new Map();
@@ -316,7 +325,7 @@ function renderNow(){
   $("#home").hidden=inL; $("#game").hidden=!inL; $("#leaveBtn").hidden=!inL;
   $("#themeBtn").textContent=document.documentElement.dataset.theme==="light"?"Dark mode":"Light mode";
   const lc=$("#lobbyChip"); lc.hidden=!inL; if(inL) lc.textContent=mode==="local"?"Practice table":`${(E.G&&E.G.lname)||(PUB&&PUB.lname)||L.name} · ${L.id.toUpperCase()}`;
-  const rc=$("#roleChip"); rc.hidden=!inL; rc.textContent=ROLE==="teacher"?"Teacher":"Student";
+  const rc=$("#roleChip"); rc.hidden=!inL; rc.textContent=ROLE==="teacher"&&!soloStu()?"Teacher":"Student";
   if(!inL){$("#stakeChip").hidden=true;applyView();renderHome();drawPicker();drawCursors();return}
   const T=isT(), P=view();
   if(!P){
@@ -325,12 +334,12 @@ function renderNow(){
     setSide(`<div class="panel"><p class="note">Connecting to the lobby…</p></div>`);drawCursors();return;
   }
   $("#stakeChip").hidden=false; $("#stakeChip").textContent=`${money(P.blinds.sb)}/${money(P.blinds.bb)} NLHE · ${P.size}-max`;
-  mySeat=T?-1:P.seats.findIndex(s=>s.uid===ME.cid);
+  mySeat=T?-1:soloStu()?SOLO.seat:P.seats.findIndex(s=>s.uid===ME.cid);
   renderTable(P,T); renderAct(P,T); renderSolve(P,T); applyView(); if(SV) SV.tableUpdate(P); if(NB) NB.tableUpdate(P); if(ODDS&&TOOLS.odds) ODDS.tableUpdate(P); renderPoll();
   setHTML($("#log"),P.log.slice().reverse().map(t=>`<li>${esc(t)}</li>`).join("")||`<li class="muted">No hands yet.</li>`);
-  if(T) renderTeacherSide(); else setSide(studentSide(P));
+  if(T) renderTeacherSide(); else setSide(soloStu()?soloSide(P):studentSide(P));
   if(picker&&!T) picker=null;
-  drawPicker(); drawCursors(); tick();
+  drawPicker(); drawCursors(); tick(); botPump(); autoDeal();
 }
 /* the table is a racetrack (straight sides, round ends); seats, bets and the button sit on smaller
    racetracks inside it. t runs 0..1 around the track, starting bottom centre and going left first.
@@ -379,11 +388,11 @@ function renderTable(P,T){
       cards=cs?cs.map(c=>cardHTML(c)).join(""):cardHTML("back")+cardHTML("back");
     }
     const open=s.has&&s.open&&!P.reveal;
-    const tag0=s.out?"Sitting out":s.folded?(P.reveal&&s.has?"Folded · shown":"Folded"):s.allin?"All-in":s.uid?(T?"Student":(me?"You":"Student")):"";
+    const tag0=s.out?"Sitting out":s.folded?(P.reveal&&s.has?"Folded · shown":"Folded"):s.allin?"All-in":me?"You":s.uid?"Student":s.bot?botLabel(s.bot)+" · bot":"";
     const tag=open?(tag0?tag0+" · ":"")+"Shown to all":tag0;
     // teachers: show or hide just this player's cards for everyone
     const eye=T&&mode!=="local"&&s.has&&!s.out&&!P.reveal&&!E.G.seats[i].shown?`<button class="showeye${s.open?" on":""}" type="button" data-open="${i}" aria-pressed="${!!s.open}" aria-label="${s.open?"Hide":"Show"} ${esc(s.name)}'s cards ${s.open?"again":"to everyone"}" title="${s.open?"Hide these cards again":"Show these cards to everyone"}">${s.open?"Hide":"Show"}</button>`:"";
-    const showTake=ROLE==="student"&&mySeat<0&&!s.uid;
+    const showTake=ROLE==="student"&&mySeat<0&&!s.uid&&!s.bot;
     h+=`<div class="seat${P.toAct===i?" act":""}${s.folded?" folded":""}${me?" me":""}" data-anc="seat${i}" style="left:${pos.x}%;top:${pos.y}%">
       <div class="hole${open?" openhole":""}">${cards}${eye}</div>
       <div class="plate"><div class="nm">${esc(s.name)}</div><div class="stk">${money(s.stack)}</div>${tag?`<div class="tag">${tag}</div>`:""}
@@ -422,12 +431,14 @@ function renderAct(P,T){
       <div class="row">${G.rules.straddle?"":`<button class="b sm${G.straddleNext?" on":""}" type="button" data-cmd="straddleNext" aria-pressed="${!!G.straddleNext}">${G.straddleNext?"Straddle on for next hand":"Straddle next hand"}</button>`}
         <button class="b sm${G.bombNext?" on":""}" type="button" data-cmd="bombNext" aria-pressed="${!!G.bombNext}">${G.bombNext?"Bomb pot is next":"Bomb pot next hand"}</button></div>
       <p class="optsum">${esc(optSummary(G.rules,P))} <span class="muted">Change these under Table setup.</span></p></div>`
+      :soloStu()?soloDealBar(P)
       :`<p class="note">${P.phase==="done"?"Hand over. Waiting for a teacher to deal.":"Waiting for a teacher to deal."}</p><p class="optsum">${esc(optSummary(P.rules,P))}</p>`);
     return;
   }
   const i=P.toAct, s=P.seats[i], mine=T||i===mySeat;
   const toCall=Math.max(0,P.curBet-s.bet), maxTo=s.bet+s.stack;
   const minTo=Math.min(P.curBet===0?P.blinds.bb:P.curBet+P.minRaise,maxTo);
+  if(s.bot&&!s.uid){setHTML(el,`<div class="actbar"><div class="who">${esc(s.name)} <span>(${esc(botLabel(s.bot))} bot, seat ${i+1})</span> is thinking…</div>${T?`<div class="row"><button class="b sm" type="button" data-cmd="undo"${undoCount()?"":" disabled"}>Undo</button>${revealBtn()}</div>`:""}</div>`);return}
   if(!mine){setHTML(el,`<div class="actbar"><div class="who">Action on ${esc(s.name)} <span>(seat ${i+1})</span> <span class="clockchip" data-clock></span></div><p class="note">${mySeat>=0?"Your turn comes after them.":"Take an open seat to play along."}</p></div>`);return}
   const verb=P.curBet===0?"Bet":"Raise to";
   const def=Math.min(maxTo,Math.max(minTo,sizeFor(P,P.curBet===0?0.66:1)));
@@ -470,7 +481,7 @@ let sideTab="seats", confirmReset=false;
 function renderTeacherSide(){
   const G=E.G, r=G.rules, local=mode==="local";
   const tabs=[["seats","Seats"],["setup","Table setup"],["people","People"]];
-  let h=`<div class="panel"><div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button class="tab" role="tab" type="button" aria-selected="${sideTab===k}" data-tab="${k}">${l}</button>`).join("")}</div>`;
+  let h=`<div class="panel">${local?soloSwitch():""}<div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button class="tab" role="tab" type="button" aria-selected="${sideTab===k}" data-tab="${k}">${l}</button>`).join("")}</div>`;
   if(sideTab==="seats"){
     h+=`<div class="seatlist">`;
     for(let i=0;i<G.size;i++){const s=S(i);const cs=E.hostCards(s).cs;
@@ -478,10 +489,11 @@ function renderTeacherSide(){
         <input type="text" id="nm${i}" value="${esc(s.name)}" data-name="${i}" aria-label="Seat ${i+1} name" maxlength="16">
         <input type="number" id="st${i}" value="${s.stack}" min="0" step="1" data-stack="${i}" aria-label="Seat ${i+1} stack">
         <div class="ops"><span class="minicards">${[0,1].map(k=>cardHTML(cs&&cs[k]||null,{btn:`data-pick="seat" data-i="${i}" data-k="${k}"`,plus:!(cs&&cs[k]),empty:`Set seat ${i+1} card ${k+1}`})).join("")}</span>
-        ${s.uid?`<span class="chip">Student</span><button class="b sm" type="button" data-unseat="${i}">Unseat</button>`:`<span class="chip">Open</span>`}
+        ${s.uid?`<span class="chip">Student</span><button class="b sm" type="button" data-unseat="${i}">Unseat</button>`:botSel(i,local?"You play it":"Open seat")}
         <button class="b sm" type="button" data-out="${i}">${s.out?"Sit in":"Sit out"}</button>
-        ${G.button===i?`<span class="chip">Button</span>`:`<button class="b sm" type="button" data-btn="${i}"${between()?"":" disabled"}>Button here</button>`}</div></div>`}
-    h+=`</div><p class="note">Click any card on the table or here to choose it. Cards set between hands are dealt on the next hand; empty slots are dealt at random.</p>`;
+        ${G.button===i?`<span class="chip">Button</span>`:`<button class="b sm" type="button" data-btn="${i}"${between()?"":" disabled"}>Button here</button>`}</div>${s.bot==="custom"&&!s.uid?botSliders(i):""}</div>`}
+    h+=`</div><p class="note">Click any card on the table or here to choose it. Cards set between hands are dealt on the next hand; empty slots are dealt at random.</p>
+      <div class="note">${local?"Pick a player type to make a seat a computer player. It acts on its own after a short pause.":"Pick a player type to fill an empty seat with a computer player. It acts on its own, and students can't take its seat until you set it back to Open seat."} ${typesHelp()}</div>`;
   } else if(sideTab==="setup"){
     const num=(id,v,min,step,label,k)=>`<div class="field"><label for="${id}">${label}</label><input type="number" id="${id}" min="${min}" step="${step}" value="${v}" data-rule="${k}"></div>`;
     h+=`<div data-anc="setup"><div class="fields">
@@ -555,11 +567,97 @@ function dcGroup(){
     <div class="row dcrow"><button class="b primary sm" type="button" data-cmd="dcpost"${dcBusy?" disabled":""}>Post to Discord</button><label class="toggle sm"><input type="checkbox" id="dcHere"><span>Notify the channel (@here)</span></label></div>
     <p class="note">${ago==null?"Nothing posted yet.":`Last posted ${ago<1?"just now":ago<60?ago+" min ago":Math.round(ago/60)+" h ago"}.`}</p>${note}</div>`;
 }
+// a dropdown someone has open in the side panel isn't redrawn under them (bots keep the table moving)
+let selOpen=false;
+document.addEventListener("pointerdown",e=>{selOpen=!!(e.target.tagName==="SELECT"&&e.target.closest("#side"))},true);
+document.addEventListener("change",()=>{if(selOpen){selOpen=false;setTimeout(render,0)}},true);
+document.addEventListener("focusout",e=>{if(selOpen&&e.target.tagName==="SELECT"){selOpen=false;setTimeout(render,0)}},true);
+document.addEventListener("keydown",e=>{if(selOpen&&(e.key==="Escape"||e.key==="Tab")){selOpen=false;setTimeout(render,0)}},true);
 function setSide(h){
+  if(selOpen) return;
   const side=$("#side"); const f=document.activeElement; const fid=f&&side.contains(f)&&f.id;
   const typing=fid&&(f.tagName==="INPUT"&&f.type!=="checkbox"); const caret=typing&&f.type==="text"?[f.selectionStart,f.selectionEnd]:null; const val=typing?f.value:null;
   setHTML(side,h);
   if(fid){const el=document.getElementById(fid); if(el&&el!==document.activeElement){el.focus(); if(val!=null) el.value=val; if(caret) try{el.setSelectionRange(caret[0],caret[1])}catch(e){}}}
+}
+/* ---------- computer players ("bots") and the practice table's student view ---------- */
+const BP_KEYS=[["vpip","Plays (VPIP)","% of hands it plays"],["pfr","Raises first (PFR)","% of hands it raises preflop"],["agg","Aggression","how often it bets and raises good hands"],["bluff","Bluffing","how often it bets or raises weak hands"],["fold","Folds to pressure","how readily it gives up when bet into"]];
+function botSel(i,none){
+  const s=S(i), tip=s.bot?BOT_TYPES[s.bot].blurb:"";
+  return `<select data-bot="${i}" aria-label="Seat ${i+1} player type" title="${esc(tip)}"><option value="">${esc(none)}</option>${BOT_ORDER.map(k=>`<option value="${k}"${s.bot===k?" selected":""}>Bot: ${esc(BOT_TYPES[k].short)}</option>`).join("")}</select>`;
+}
+function botSliders(i){
+  const s=S(i), d=BOT_TYPES.custom, bp=s.bp||{};
+  return `<div class="bpgrid" data-anc="bp${i}">${BP_KEYS.map(([k,l,h])=>{const v=Number.isFinite(bp[k])?bp[k]:d[k];return `<label class="bp" title="${esc(h)}"><span>${l} <b>${v}</b></span><input type="range" min="0" max="100" step="1" value="${v}" data-bp="${i}" data-k="${k}" aria-label="Seat ${i+1} ${l}"></label>`}).join("")}</div>`;
+}
+const typesHelp=()=>`<details class="types"><summary>What the player types do</summary><dl>${BOT_ORDER.map(k=>`<dt>${esc(BOT_TYPES[k].label)}</dt><dd>${esc(BOT_TYPES[k].blurb)}</dd>`).join("")}</dl></details>`;
+function botOp(op){if(mode==="local"){if(E.runOp(op)){localClock();render()}}else sendOp(op)}
+function soloSwitch(){
+  return `<div class="soloswitch"><span class="seg" role="group" aria-label="Practice view"><button type="button" data-solo="teacher" aria-pressed="${SOLO.view!=="student"}">Teacher view</button><button type="button" data-solo="student" aria-pressed="${SOLO.view==="student"}">Student view</button></span>
+    <span class="note">${SOLO.view==="student"?"You play one seat against computer players.":"See and set every card. Switch to Student view to play a seat yourself."}</span></div>`;
+}
+// student view: every seat except yours is a computer player (Balanced unless you pick a type)
+function fillBots(){
+  const G=E.G; if(!G) return; SOLO.seat=Math.max(0,Math.min(SOLO.seat|0,G.size-1));
+  G.seats.forEach((s,j)=>{if(j>=G.size) return; if(j===SOLO.seat){s.bot=null;s.out=false} else if(!s.bot){s.bot="balanced";s.out=false}});
+  const mine=G.seats[SOLO.seat]; if(myName&&mine.name===NAMES[SOLO.seat]) mine.name=myName;
+}
+function setSolo(v){
+  if(SOLO.view===v) return; SOLO.view=v; saveSolo(); picker=null; clearTimeout(dealT); dealT=null;
+  if(v==="student") fillBots();
+  render();
+}
+function soloDealBar(P){
+  const me=P.seats[SOLO.seat], broke=me&&me.stack<=0;
+  if(broke) return `<div class="actbar"><div class="who">You're out of chips.</div><div class="row"><button class="b primary big" type="button" data-solo="rebuy">Rebuy for ${money(P.blinds.bb*100)}</button></div></div>`;
+  const waiting=P.phase==="done"&&SOLO.auto;
+  return `<div class="actbar"><div class="who">${P.phase==="done"?"Hand over.":"Ready."} <span>${waiting?"Next hand in a moment…":"Deal when you're ready."}</span></div>
+    <div class="row"><button class="b primary big" type="button" data-solo="deal">${waiting?"Deal now":"Deal hand"}</button>${waiting?`<button class="b" type="button" data-solo="pause">Pause</button>`:""}</div></div>`;
+}
+function soloSide(P){
+  const G=E.G, me=SOLO.seat, btw=between();
+  const opp=[...Array(G.size).keys()].filter(j=>j!==me);
+  return `<div class="panel">${soloSwitch()}<h2>Solo practice</h2>
+    <p class="note">You play seat ${me+1}; every other seat is a computer player. Their cards stay hidden until showdown, and the solver and tools only see what you see.</p>
+    <div class="fields"><div class="field"><label for="soloSeat">Your seat</label><select id="soloSeat"${btw?"":" disabled"}>${[...Array(G.size).keys()].map(j=>`<option value="${j}"${j===me?" selected":""}>Seat ${j+1}</option>`).join("")}</select></div>
+      <div class="field"><label for="soloSize">Players</label><select id="soloSize"${btw?"":" disabled"}>${[2,3,4,5,6,7,8,9].map(n=>`<option${n===G.size?" selected":""}>${n}</option>`).join("")}</select></div></div>
+    <label class="toggle"><input type="checkbox" id="soloAuto"${SOLO.auto?" checked":""}><span>Deal the next hand automatically</span></label>
+    <h3 class="subh">Opponents</h3>
+    <div class="field"><label for="botAll">Make everyone</label><select id="botAll"><option value="">Choose a type…</option>${BOT_ORDER.filter(k=>k!=="custom").map(k=>`<option value="${k}">${esc(BOT_TYPES[k].label)}</option>`).join("")}<option value="mix">A random mix</option></select></div>
+    <div class="seatlist">${opp.map(j=>{const s=S(j);return `<div class="srow bot${G.toAct===j?" act":""}"><div class="num">${j+1}</div><div class="nm">${esc(s.name)} <span class="muted">· ${money(s.stack)}</span></div><div></div>
+      <div class="ops">${botSel(j,"Bot: Balanced")}</div>${s.bot==="custom"?botSliders(j):""}</div>`}).join("")}</div>
+    <div class="note">${typesHelp()}</div>
+    <div class="row" style="margin-top:8px"><button class="b sm" type="button" data-solo="stacks">Reset every stack to ${money(G.blinds.bb*100)}</button></div></div>`;
+}
+let botT=null, botKey="", dealT=null;
+// practice table: computer players act on this device after a short pause
+function botPump(){
+  const G=E.G, i=G&&G.toAct;
+  const on=mode==="local"&&G&&i!=null&&["preflop","flop","turn","river"].includes(G.phase)&&!!G.seats[i].bot;
+  const key=on?G.hand+":"+G.turn:"";
+  if(key===botKey) return; clearTimeout(botT); botKey=key; if(!on) return;
+  botT=setTimeout(()=>{
+    if(mode!=="local"||!E.G||E.G.hand+":"+E.G.turn!==key||E.G.toAct!==i||!E.G.seats[i].bot) return;
+    let d; try{d=botDecide(E.G,i)}catch(e){console.error(e);d={a:"fold"}}
+    if(!E.runOp({t:"act",seat:i,a:d.a,amt:d.amt})&&!E.runOp({t:"act",seat:i,a:"check"})) E.runOp({t:"act",seat:i,a:"fold"});
+    botKey=""; localClock(); render();
+  },thinkMs(G));
+}
+// student view: the next hand starts by itself a few seconds after the last one ends
+function autoDeal(){
+  const G=E.G, want=soloStu()&&SOLO.auto&&G.phase==="done"&&G.seats[SOLO.seat].stack>0&&E.readyCount()>=2;
+  if(!want){if(dealT){clearTimeout(dealT);dealT=null}return}
+  if(dealT) return;
+  const h=G.hand; dealT=setTimeout(()=>{dealT=null;if(soloStu()&&SOLO.auto&&E.G.phase==="done"&&E.G.hand===h){E.runOp({t:"deal"});localClock();render()}},2800);
+}
+function soloCmd(c){
+  const G=E.G;
+  if(c==="teacher"||c==="student"){setSolo(c);return}
+  if(!soloStu()) return;
+  if(c==="deal"){clearTimeout(dealT);dealT=null;if(E.readyCount()<2){flash("Need at least two players with chips.");return}E.runOp({t:"deal"});localClock();render();return}
+  if(c==="pause"){SOLO.auto=false;saveSolo();clearTimeout(dealT);dealT=null;render();return}
+  if(c==="rebuy"){E.runOp({t:"stack",i:SOLO.seat,v:G.blinds.bb*100});render();return}
+  if(c==="stacks"){E.runOp({t:"allstacks",v:G.blinds.bb*100});render();return}
 }
 function studentSide(P){
   const teacherHere=peers.some(p=>p.role==="teacher");
@@ -677,6 +775,7 @@ document.addEventListener("click",e=>{
   const t=e.target.closest("button"); if(!t) return;
   if(t.id==="toolsBtn"){const m=$("#toolsMenu");m.hidden=!m.hidden;t.setAttribute("aria-expanded",String(!m.hidden));return}
   if(t.dataset.poll){pollClick(t);return}
+  if(t.dataset.solo){soloCmd(t.dataset.solo);return}
   if(t.closest("#solverRoot")) return;
   if(t.dataset.viewMode){setView(t.dataset.viewMode);return}
   if(t.dataset.svload!=null&&SV){const P=view();const sp=P&&(P.spots||[])[+t.dataset.svload];if(sp){SV.loadTableSpot(sp,P);if(viewMode==="table") setView(window.innerWidth>=1100?"both":"solver")}return}
@@ -745,6 +844,7 @@ document.addEventListener("input",e=>{
   const t=e.target;
   if(t.id==="amtRange"){$("#amtNum").value=t.value;updRaiseLabel()}
   else if(t.id==="amtNum"){const r=$("#amtRange");if(r) r.value=t.value;updRaiseLabel()}
+  else if(t.dataset.bp!=null){const b=t.closest("label").querySelector("b");if(b) b.textContent=t.value}
   else if(t.id==="homeName"){myName=t.value.slice(0,16);lsSet("hsp-name",myName)}
   else if(t.dataset.pin){pollInput(t)}
   else if(t.id==="dcUrl"){dcUrl=t.value}
@@ -753,7 +853,17 @@ document.addEventListener("input",e=>{
 });
 document.addEventListener("change",e=>{
   if(e.target.dataset.tool){setTool(e.target.dataset.tool,e.target.checked);return}
-  const t=e.target; if(!mode||!isT()) return;
+  const t=e.target;
+  if(mode&&t.dataset.bot!=null&&(isT()||soloStu())){const i=+t.dataset.bot;botOp({t:"bot",i,v:t.value||(soloStu()?"balanced":null)});return}
+  if(mode&&t.dataset.bp!=null&&(isT()||soloStu())){botOp({t:"bot",i:+t.dataset.bp,v:"custom",p:{[t.dataset.k]:+t.value}});return}
+  if(soloStu()){
+    if(t.id==="soloAuto"){SOLO.auto=t.checked;saveSolo();render();return}
+    if(t.id==="soloSeat"&&between()){SOLO.seat=+t.value;saveSolo();fillBots();render();return}
+    if(t.id==="soloSize"&&between()){E.runOp({t:"size",v:+t.value});fillBots();render();return}
+    if(t.id==="botAll"&&t.value){const v=t.value;for(let j=0;j<E.G.size;j++) if(j!==SOLO.seat){const k=v==="mix"?BOT_ORDER.filter(x=>x!=="custom")[Math.floor(Math.random()*7)]:v;E.runOp({t:"bot",i:j,v:k})}render();return}
+    return;
+  }
+  if(!mode||!isT()) return;
   if(t.id==="dcAuto"){wsSend({t:"dc",op:"auto",v:t.checked});return}
   if(t.dataset.rule){const k=t.dataset.rule;sendOp({t:"rule",k,v:t.type==="checkbox"?t.checked:t.tagName==="SELECT"&&k!=="clock"?t.value:+t.value});return}
   if(t.dataset.name!=null){sendOp({t:"name",i:+t.dataset.name,v:t.value})}
@@ -780,6 +890,7 @@ function doAct(type){
   const amt=type==="raise"?+($("#amtNum")||{}).value:0;
   if(isT()){sendOp({t:"act",seat:P.toAct,a:type,amt});return}
   if(P.toAct!==mySeat) return;
+  if(soloStu()){E.runOp({t:"act",seat:mySeat,a:type,amt});localClock();render();return}
   if(wsSend({t:"act",a:type,amt})) setHTML($("#actPanel"),`<p class="note">Sent…</p>`);
 }
 
