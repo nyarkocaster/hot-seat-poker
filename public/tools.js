@@ -8,6 +8,7 @@ import { PRESETS, presetOptions } from "./solver/range.js";
 const SYM = { s: "♠", h: "♥", d: "♦", c: "♣" };
 const esc = t => String(t == null ? "" : t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const num = v => { const n = parseFloat(String(v).replace(/[$,\s]/g, "")); return Number.isFinite(n) ? n : 0; };
+const MAXP = 9; // the stove takes as many players as the biggest table
 const r2 = n => Math.round(n * 100) / 100;
 const $$ = n => (n < 0 ? "−$" : "$") + Math.abs(r2(n)).toLocaleString("en-US", { maximumFractionDigits: 2 });
 const nn = n => r2(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -265,6 +266,7 @@ export function createStove(el, opt = {}) {
   }
   function draw() {
     drawRows();
+    const addB = q('[data-s="add"]'); if (addB) addB.disabled = rows.length >= MAXP;
     const { b, ps, err } = parsed();
     q(".sboard").innerHTML = b.cards.length ? b.cards.map(chip).join("") : "";
     rows.forEach((r, i) => {
@@ -301,7 +303,7 @@ export function createStove(el, opt = {}) {
     if (b.dataset.rm != null) { rows.splice(+b.dataset.rm, 1); sel = Math.min(sel, rows.length - 1); q(".srows").innerHTML = ""; run(); return; }
     if (b.dataset.use != null) { const i = +b.dataset.use, x = res && res.players[i]; if (x && opt.odds && opt.odds()) { opt.odds().setStove(x.eq, rows[i].label || rows[i].text || `Player ${i + 1}`); if (opt.flash) opt.flash(`Odds calculator now uses ${pc(x.eq)} equity`); } return; }
     const c = b.dataset.s;
-    if (c === "add" && rows.length < 6) { rows.push({ text: "", label: "" }); q(".srows").innerHTML = ""; draw(); }
+    if (c === "add" && rows.length < MAXP) { rows.push({ text: "", label: "" }); q(".srows").innerHTML = ""; draw(); }
     else if (c === "clear") { rows = [{ text: "", label: "" }, { text: "", label: "" }]; board = dead = ""; sel = 0; q('[data-s="board"]').value = ""; q('[data-s="dead"]').value = ""; q(".srows").innerHTML = ""; run(); }
     else if (c === "table") fromTable();
     else if (c === "solver") fromSolver();
@@ -321,10 +323,9 @@ export function createStove(el, opt = {}) {
       out.push({ text: cards ? cards.join(" ") : "", label: s.name + (i === me ? " (you)" : "") });
     }
     if (T) P.seats.forEach(s => { if (s.has && s.folded && s.cards) deadC.push(...s.cards); });
-    const rowsNew = out.slice(0, 6);
+    const rowsNew = out.slice(0, MAXP);
     if (rowsNew.length < 2) rowsNew.push({ text: "", label: "" });
     setAll(rowsNew, (P.board || []).join(" "), deadC.join(" "));
-    if (live.length > 6 && opt.flash) opt.flash("The stove takes up to six players");
   }
   // After a solve: both ranges as they stand at the spot on screen in the solver, each hand weighted by
   // how often it gets there. Before a solve: the starting ranges typed into the solver, on its board.

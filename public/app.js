@@ -4,6 +4,7 @@ import {createSolver} from "./solver/core.js";
 import {createDock,solverPalette,notesPalette} from "./dock.js";
 import {createNotes} from "./notes.js";
 import {createOdds,createStove} from "./tools.js";
+import {createCombos} from "./combos.js";
 import {createCharts} from "./charts.js";
 import {BOT_TYPES,BOT_ORDER,botLabel,decide as botDecide,thinkMs} from "./bots.js";
 
@@ -89,7 +90,8 @@ const TOOLS=lsGet("hsp-tools")||{};
 function setTool(k,on){
   TOOLS[k]=!!on; lsSet("hsp-tools",TOOLS); render();
   if(on){const P=view(); if(k==="odds"&&ODDS){ODDS.refresh();} if(k==="notes"&&NB){NB.refresh();} if(k==="stove"&&STOVE&&P&&["preflop","flop","turn","river"].includes(P.phase)&&STOVE.rows.every(r=>!r.text)) STOVE.fromTable();
-    const el=$(k==="odds"?"#oddsPanel":k==="notes"?"#notesPanel":k==="charts"?"#chartsPanel":"#stovePanel"); setTimeout(()=>{const w=el.closest(".dk")||el; w.scrollIntoView({behavior:"smooth",block:"nearest"})},60)}
+    if(k==="combos"&&CMB&&CMB.state().board===""&&!CMB.state().known) CMB.fromTable();
+    const el=$(k==="odds"?"#oddsPanel":k==="notes"?"#notesPanel":k==="charts"?"#chartsPanel":k==="combos"?"#combosPanel":"#stovePanel"); setTimeout(()=>{const w=el.closest(".dk")||el; w.scrollIntoView({behavior:"smooth",block:"nearest"})},60)}
 }
 
 /* ---------- polls: the teacher asks, everyone answers privately, then the answers are shown ---------- */
@@ -171,12 +173,12 @@ function renderPoll(force){
 }
 
 /* ---------- the solver, in this window ---------- */
-let SV=null, NB=null, ODDS=null, STOVE=null, CH=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
+let SV=null, NB=null, ODDS=null, STOVE=null, CH=null, CMB=null, svOn=false, viewMode=lsGet("hsp-view")||"table";
 const DOCK=createDock($("#duo")), SVPAL=solverPalette($("#svPal")); let NBPAL=null;
 function unmountSolver(){
   DOCK.release(); SVPAL.release(); if(NBPAL) NBPAL.release(); NBPAL=null;
   if(SV) SV.destroy(); if(NB) NB.destroy(); if(STOVE) STOVE.destroy(); if(CH) CH.destroy(); SV=null; NB=null; ODDS=null; STOVE=null; CH=null;
-  $("#solverRoot").innerHTML=""; $("#notesPanel").innerHTML=""; $("#oddsPanel").innerHTML=""; $("#stovePanel").innerHTML=""; $("#chartsPanel").innerHTML="";
+  $("#solverRoot").innerHTML=""; $("#notesPanel").innerHTML=""; $("#oddsPanel").innerHTML=""; $("#stovePanel").innerHTML=""; $("#combosPanel").innerHTML=""; CMB=null; $("#chartsPanel").innerHTML="";
   POLL=null; pollDraft=null; pollPick=null;
 }
 function mountSolver(){
@@ -187,6 +189,7 @@ function mountSolver(){
   const tbl={current:()=>view(),mySeat:()=>mySeat,myCards:()=>isT()?null:(MINE&&PUB&&MINE.hand===PUB.hand?MINE.cards:null),isTeacher:()=>isT()};
   ODDS=createOdds($("#oddsPanel"),{table:tbl});
   STOVE=createStove($("#stovePanel"),{table:tbl,solver:()=>solverAllowed()?SV:null,odds:()=>TOOLS.odds?ODDS:null,flash});
+  CMB=createCombos($("#combosPanel"),{table:tbl,solver:()=>solverAllowed()?SV:null,flash});
   NB=createNotes($("#notesPanel"),{transport:mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},canEdit:()=>isT()||svOn}:null,table:{current:()=>view()},solver:()=>SV,flash});
   NBPAL=notesPalette(NB.body,NB.foot); NBPAL.set("main");
   CH=createCharts($("#chartsPanel"),{transport:mode==="lobby"?{send:o=>{if(ws&&wsOpen) ws.send(JSON.stringify(o))},canEdit:()=>isT()}:null,isTeacher:()=>isT()||mode==="local",flash});
@@ -216,6 +219,8 @@ function applyView(){
   const notesOk=solverAllowed(); $("#notesPanel").hidden=!mode||TOOLS.notes===false||!notesOk;
   const nc=document.querySelector('[data-tool="notes"]'); if(nc){nc.disabled=!notesOk;} const nn=$("#notesNote"); if(nn) nn.textContent=notesOk?"":" · opens when the solver does";
   const sc=document.querySelector('[data-tool="stove"]'); if(sc) sc.disabled=!stoveOk;
+  $("#combosPanel").hidden=!mode||!TOOLS.combos||!stoveOk; const cc=document.querySelector('[data-tool="combos"]'); if(cc) cc.disabled=!stoveOk;
+  const cn=$("#combosNote"); if(cn){const w=(view()&&view().rules&&view().rules.stoveStudents)||"always"; cn.textContent=stoveOk?"":w==="off"?" · your teacher has it turned off":" · opens between hands";}
   const sn=$("#stoveNote"); if(sn){const w=(view()&&view().rules&&view().rules.stoveStudents)||"always"; sn.textContent=stoveOk?"":w==="off"?" · your teacher has it turned off":" · opens between hands";}
   $("#toolsWrap").hidden=!mode;
   document.querySelectorAll("[data-tool]").forEach(x=>{x.checked=x.dataset.tool==="notes"?TOOLS.notes!==false:!!TOOLS[x.dataset.tool]});
@@ -520,7 +525,7 @@ function renderTeacherSide(){
     <div class="group"><h3>Teaching</h3>
       <div class="row">${revealBtn()}<span class="note">Shows every hand to students, folded ones too. To show just one player's cards, press <b>Show</b> above their seat on the table.</span></div>
       <h3 class="subh">What students can use</h3><p class="note">Everything is open to students unless you turn it off here.</p>
-      <div class="fields" style="margin-top:4px">${[["solverSel","solverStudents","Solver and shared notes",3],["stoveSel","stoveStudents","Poker stove",3],["oddsSel","oddsStudents","Odds calculator",2],["chartsSel","chartsStudents","Preflop charts (to read)",2]].map(([id,k,l,n])=>`<div class="field" style="grid-column:1/-1"><label for="${id}">${l}</label><select id="${id}" data-rule="${k}">${(n===3?[["always","Any time, even mid-hand"],["between","Only between hands"],["off","Never (teachers only)"]]:[["always","Yes"],["off","No (teachers only)"]]).map(([v,t])=>`<option value="${v}"${(r[k]||"always")===v?" selected":""}>${t}</option>`).join("")}</select></div>`).join("")}</div>
+      <div class="fields" style="margin-top:4px">${[["solverSel","solverStudents","Solver and shared notes",3],["stoveSel","stoveStudents","Poker stove and combo counter",3],["oddsSel","oddsStudents","Odds calculator",2],["chartsSel","chartsStudents","Preflop charts (to read)",2]].map(([id,k,l,n])=>`<div class="field" style="grid-column:1/-1"><label for="${id}">${l}</label><select id="${id}" data-rule="${k}">${(n===3?[["always","Any time, even mid-hand"],["between","Only between hands"],["off","Never (teachers only)"]]:[["always","Yes"],["off","No (teachers only)"]]).map(([v,t])=>`<option value="${v}"${(r[k]||"always")===v?" selected":""}>${t}</option>`).join("")}</select></div>`).join("")}</div>
       <label class="toggle"><input type="checkbox" id="keepSetup"${G.keepSetup?" checked":""}><span>Keep my card setup for the next hand<br><span class="note">Replays the same hole cards so students can try other lines. Board cards you set are used once.</span></span></label>
       <div class="row" style="margin-top:8px">${!between()?`<button class="b" type="button" data-cmd="voidhand">Cancel this hand</button>`:""}
       ${confirmReset?`<span class="confirm"><span>Reset table, stacks and log?</span><button class="b sm warn" type="button" data-cmd="reset">Reset</button><button class="b sm" type="button" data-cmd="noreset">Keep</button></span>`:`<button class="b warn" type="button" data-cmd="askreset">Reset table…</button>`}</div></div></div>`;

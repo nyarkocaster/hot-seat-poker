@@ -206,11 +206,12 @@ const UNITS = [
   { id: "notes", title: "Notes", sel: ["#notesPanel"] },
   { id: "odds", title: "Odds calculator", sel: ["#oddsPanel"] },
   { id: "stove", title: "Poker stove", sel: ["#stovePanel"] },
+  { id: "combos", title: "Combo counter", sel: ["#combosPanel"] },
   { id: "charts", title: "Preflop charts", sel: ["#chartsPanel"] },
 ];
 const DEFAULTS = {
-  both: [["table", "odds", "stove", "log", "side"], ["solver", "notes", "charts"]],
-  solver: [["solver"], ["notes", "odds", "stove", "charts"]],
+  both: [["table", "odds", "stove", "log", "side"], ["solver", "notes", "combos", "charts"]],
+  solver: [["solver"], ["notes", "odds", "stove", "combos", "charts"]],
 };
 export function createDock(host) {
   const p = createPalette(host, UNITS, DEFAULTS, "hsp-dock2-", { id: "dock", bodyClass: "docked" });

@@ -126,7 +126,7 @@ export function applySpotPatch(spot, d) {
   return spot;
 }
 export function defaultSpot() {
-  return { board: ["Qs", "Jh", "2h"].map(cardId), pot: 5.5, eff: 97.5, rakePct: 0, rakeCap: 0,
+  return { board: [], pot: 5.5, eff: 97.5, rakePct: 0, rakeCap: 0,
     ranges: ["", ""], names: ["BB", "BTN"],
     sizes: TREES.quick.slice(), acc: 0.5, maxIt: 1000, allinT: 1.5, forceT: 0.15, note: "" };
 }
@@ -196,7 +196,7 @@ export function createSolver(root, opt = {}) {
         <p class="note" id="sv-note" hidden></p>
         <div class="field" id="sv-pairF" hidden><label for="sv-pair">Players to study</label><select id="sv-pair"></select></div>
         <div class="field"><label>Board <span class="muted">(3 to 5 cards, tap to add or remove)</span></label>
-          <div class="boardline"><div class="boardrow" id="sv-boardShow"></div><button class="b sm" type="button" id="sv-deckT" aria-expanded="false" aria-controls="sv-deck" hidden>Change board</button></div>
+          <div class="boardline"><div class="boardrow" id="sv-boardShow"></div><button class="b sm" type="button" id="sv-deckT" aria-expanded="false" aria-controls="sv-deck" hidden>Change board</button></div><p class="note" id="sv-boardHint" hidden>No board yet. Pick a flop below, or load a spot from the table once its flop is dealt.</p>
           <div class="deck sdeck" id="sv-deck"${anc("svdeck")}></div>
         </div>
         <div class="fields">
@@ -343,6 +343,7 @@ export function createSolver(root, opt = {}) {
     const full = b.length >= 3, open = !full || deckOpen;
     $("deck").hidden = !open || !canEdit();
     $("deckT").hidden = !full || !canEdit();
+    $("boardHint").hidden = full;
     $("deckT").textContent = deckOpen ? "Done" : "Change board";
     $("deckT").setAttribute("aria-expanded", String(open));
   }

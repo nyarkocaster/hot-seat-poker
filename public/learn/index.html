@@ -34,7 +34,7 @@
         <li><a href="#bots">Computer players</a></li>
         <li><a href="#solo">Solo practice</a></li>
         <li><a href="#teaching">Teaching tools</a></li>
-        <li><a href="#tools">Odds calculator and poker stove</a></li>
+        <li><a href="#tools">Odds, stove and combos</a></li>
         <li><a href="#solver">Study a spot in the solver</a></li>
         <li><a href="#app">Big solves</a></li>
         <li><a href="#student">For students</a></li>
@@ -127,13 +127,16 @@
         <dd>When a player is to act, press <span class="ui">Ask everyone what … should do</span>. Between hands, use <span class="ui">Ask a question</span>. The question and choices are filled in for you, and you can edit both. Each student picks an answer privately, with an amount for a bet or raise and an optional reason. You see who has answered but not what they said. Press <span class="ui">Reveal answers</span> to show everyone the tally, the amounts and the reasons together.</dd>
       </dl>
 
-      <h2 id="tools">Odds calculator and poker stove</h2>
-      <p>Both are hidden until you turn them on under <span class="ui">Tools</span> at the top. Each person turns them on for themselves, and nobody else sees your tools. Students can use the stove when the teacher's setting allows it.</p>
+      <h2 id="tools">Odds calculator, poker stove and combo counter</h2>
+      <p>They are hidden until you turn them on under <span class="ui">Tools</span> at the top. Each person turns them on for themselves, and nobody else sees your tools. Students can use the stove and the combo counter when the teacher's setting allows it.</p>
       <dl>
         <dt>Odds calculator</dt>
         <dd>Fills in the pot and the amount to call from the hand being played, then shows every step as the formula followed by the same formula with the real numbers. It covers pot odds and the equity you need, outs (next card, by the river, and the rules of 2 and 4), whether calling makes money and its expected value, the implied odds you'd need, and what a bluff needs to work. Teachers can pick any player, and outs are counted against everyone's real cards. Untick <span class="ui">Use this hand's numbers</span> to try your own.</dd>
         <dt>Poker stove</dt>
-        <dd>Works out each player's equity: how often they'd win if all the cards were dealt. Type a hand like <kbd>AhKh</kbd> or a range like <kbd>QQ+,AKs</kbd> for up to six players, with an optional board and dead cards. Small jobs are checked against every possible board; big ones are estimated from a few million deals. <span class="ui">Use the table</span> fills in the hand being played (your own cards if you're a student), and <span class="ui">Use the solver's ranges</span> brings in the solver's two players. Before a solve, that's the starting ranges as typed, on the solver's board. After a solve, it's both ranges at the spot you're looking at in the answer: after a check and a bet, say, each hand counted by how often the solver plays it that way to get there. Typing in a row replaces it. Click a player to see what hands they end up with, or send their equity to the odds calculator.</dd>
+        <dd>Works out each player's equity: how often they'd win if all the cards were dealt. Type a hand like <kbd>AhKh</kbd> or a range like <kbd>QQ+,AKs</kbd> for up to nine players (as many as the biggest table), with an optional board and dead cards. Small jobs are checked against every possible board; big ones are estimated from a few million deals. <span class="ui">Use the table</span> fills in the hand being played (your own cards if you're a student), and <span class="ui">Use the solver's ranges</span> brings in the solver's two players. Before a solve, that's the starting ranges as typed, on the solver's board. After a solve, it's both ranges at the spot you're looking at in the answer: after a check and a bet, say, each hand counted by how often the solver plays it that way to get there. Typing in a row replaces it. Click a player to see what hands they end up with, or send their equity to the odds calculator.</dd>
+      
+        <dt>Combo counter</dt>
+        <dd>Counts how many hands an opponent can hold. A full deck makes 1,326 two-card hands: 6 of each pair, 4 of each suited hand and 12 of each offsuit hand. Every card you can see takes some away. Enter the board and your own cards (or press <span class="ui">Use the table</span>), and the counter shows the steps, for example 47 unseen cards → 47 × 46 ÷ 2 = 1,081 hands. Add a range (typed, from the charts, or one of the solver's players) to see how many of its combos are left, how many the board removed, and how many your own cards block. The grid shows the combos left for each starting hand; click a square for the math and the exact combos, with the impossible ones struck through. On a flop or later, the list below sorts the range into made hands and draws; click a row to see where those combos sit. After a solve, <span class="ui">Use the solver's spot</span> loads a player's range at the spot on screen, each hand weighted by how often it gets there.</dd>
       </dl>
 
       <h2 id="solver">Study a spot in the solver</h2>
