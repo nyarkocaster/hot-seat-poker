@@ -199,5 +199,18 @@ export function countOuts(hero, others, board) {
     const r = best([...board, c]);
     (r > 0 ? win : r === 0 ? tie : lose).push(c);
   }
-  return { now, win, tie, lose, unseen: 52 - known.size };
+  const out = { now, win, tie, lose, unseen: 52 - known.size };
+  // on the flop, also deal every turn-and-river pair: the exact chance by the river, and how much of it
+  // comes from runner-runner hands (both cards needed, neither one an out by itself)
+  if (board.length === 3) {
+    const rest = []; for (let c = 0; c < 52; c++) if (!known.has(c)) rest.push(c);
+    const outSet = new Set(win); let n = 0, eq = 0, rr = 0; const rrCat = new Array(9).fill(0);
+    for (let i = 0; i < rest.length; i++) for (let j = i + 1; j < rest.length; j++) {
+      const b = [...board, rest[i], rest[j]], r = best(b); n++;
+      if (r > 0) { eq += 1; if (!outSet.has(rest[i]) && !outSet.has(rest[j])) { rr++; rrCat[score([...hero, ...b]) >> 20]++; } }
+      else if (r === 0) eq += 0.5;
+    }
+    out.river = { pairs: n, eq: eq / n, rr: rr / n, rrCat: rrCat.map(x => x / n) };
+  }
+  return out;
 }

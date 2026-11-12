@@ -597,3 +597,5 @@ details.types dd{margin:0 0 6px}
 .crow .cbar{height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
 .crow .cbar i{display:block;height:100%;background:var(--gold)}
 .crow .muted{text-align:right;font-size:12px}
+.orr{border-left:3px solid var(--gold);padding:6px 10px;margin:6px 0;font-size:13.5px}
+.orr p{margin:0 0 6px}

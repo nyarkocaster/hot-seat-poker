@@ -64,7 +64,12 @@ export function createOdds(el, opt = {}) {
     st.auto = { seat, name: s.name, hero: hero || null, board: P.board || [], allin, known: !!hero && others.length === oppLive && oppLive > 0 };
     if (st.auto.known && (st.street === "flop" || st.street === "turn")) {
       const o = countOuts(ids(hero), others.map(ids), ids(P.board));
-      st.auto.outs = o; st.outs = o.now < 0 ? o.win.length : o.lose.length;
+      st.auto.outs = o;
+      // the counted outs fill the box once per spot; after you type or pick your own number, it stays until the table moves on
+      const spot = JSON.stringify([P.hand, seat, P.board]);
+      if (spot !== st.outsSpot) { st.outsSpot = spot; st.outsUser = false; }
+      st.auto.counted = o.now < 0 ? o.win.length : o.lose.length;
+      if (!st.outsUser) st.outs = st.auto.counted;
     } else st.auto.outs = null;
     // seat list for teachers
     if (T) {
@@ -106,6 +111,7 @@ export function createOdds(el, opt = {}) {
         const ao = A && st.follow && A.outs;
         h2 += `<div class="row ooutsrow"><label>Outs <input type="number" min="0" max="${unseen}" step="1" data-o="outs" value="${N}"></label>
           <span class="ochips">${[["Flush draw", 9], ["Open-ended straight draw", 8], ["Gutshot", 4], ["Two overcards", 6], ["Flush + straight draw", 15], ["Pair to trips", 2]].map(([l, n]) => `<button type="button" class="b sm" data-outs="${n}">${l} · ${n}</button>`).join("")}</span></div>`;
+        if (ao && st.outsUser && Math.round(st.outs) !== A.counted) h2 += `<p class="note">You set ${N} outs. <button type="button" class="linkbtn" data-o="recount">Use the ${A.counted} counted from the real cards</button></p>`;
         if (ao) {
           if (ao.now < 0) h2 += `<p class="note">Counted against everyone's real cards: ${A.name} is behind now, and ${ao.win.length} card${ao.win.length === 1 ? "" : "s"} put${ao.win.length === 1 ? "s" : ""} them ahead: ${ao.win.map(chip).join("")}${ao.tie.length ? `. ${ao.tie.length} more give a tie: ${ao.tie.map(chip).join("")}` : ""}.</p>`;
           else h2 += `<p class="note">Counted against everyone's real cards: ${A.name} is ${ao.now > 0 ? "ahead" : "tied"} now. ${ao.lose.length} card${ao.lose.length === 1 ? "" : "s"} would put them behind: ${ao.lose.map(chip).join("")}. Outs below are the other player's.</p>`;
@@ -118,6 +124,13 @@ export function createOdds(el, opt = {}) {
           const m = unseen - N; two = 1 - (m / unseen) * ((m - 1) / (unseen - 1));
           h2 += EQ("Hit by the river (turn or river)", "1 − (Misses ÷ Unseen) × ((Misses − 1) ÷ (Unseen − 1))", `1 − (${m} ÷ ${unseen}) × (${m - 1} ÷ ${unseen - 1}) = 1 − ${dec((m / unseen) * ((m - 1) / (unseen - 1)))}`, pc(two));
           h2 += EQ("Shortcut: rule of 4", "Outs × 4", `${N} × 4`, `${N * 4}%`, "short");
+          const rv = ao && ao.river;
+          if (rv && ao.now < 0) {
+            const cats = rv.rrCat.map((x, i) => [CATS[i], x]).filter(x => x[1] > 0.0005).sort((a, b) => b[1] - a[1]);
+            h2 += `<div class="orr"><p><b>Counting every turn and river</b> (all ${rv.pairs.toLocaleString("en-US")} pairs of cards), ${esc(A.name)} wins <b>${pc(rv.eq)}</b> by the river.</p>
+              ${rv.rr > 0.0005 ? `<p>Outs only count single cards that win. <b>${pc(rv.rr)}</b> more comes from runner-runner hands, where the turn and river both have to help and neither card wins alone: ${cats.map(([c, x]) => `${c.toLowerCase()} ${pc(x)}`).join(", ")}. A common shortcut is to count a runner-runner draw as about one extra out.</p>` : `<p>None of it comes from runner-runner hands: every win needs one of the outs.</p>`}
+              <button type="button" class="b sm" data-own="${(rv.eq * 100).toFixed(1)}">Use ${pc(rv.eq)} as my equity</button></div>`;
+          }
         }
         const horizon = st.street === "flop" ? (st.horizon === "auto" ? (A && st.follow && A.allin ? "river" : "next") : st.horizon) : "next";
         if (st.street === "flop") h2 += `<div class="row ohz"><span class="muted">Use:</span><div class="seg">${[["next", "Next card"], ["river", "By the river"]].map(([k, l]) => `<button type="button" data-hz="${k}" aria-pressed="${horizon === k}">${l}</button>`).join("")}</div></div>
@@ -169,7 +182,7 @@ export function createOdds(el, opt = {}) {
   el.addEventListener("input", e => {
     const k = e.target.dataset.o; if (!k) return;
     if (k === "pot" || k === "call") { stopFollow(); st[k] = Math.max(0, num(e.target.value)); renderSoon(); }
-    else if (k === "outs") { st.outs = Math.max(0, num(e.target.value)); renderSoon(); }
+    else if (k === "outs") { st.outs = Math.max(0, num(e.target.value)); st.outsUser = true; renderSoon(); }
     else if (k === "own") { st.own = num(e.target.value); renderSoon(); }
     else if (k === "p0" || k === "bet") { if (k === "p0") stopFollow(); st[k] = Math.max(0, num(e.target.value)); renderSoon(); }
   });
@@ -182,7 +195,9 @@ export function createOdds(el, opt = {}) {
   el.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.src) { st.src = b.dataset.src; render(); }
-    else if (b.dataset.outs) { st.outs = +b.dataset.outs; render(); }
+    else if (b.dataset.outs) { st.outs = +b.dataset.outs; st.outsUser = true; render(); }
+    else if (b.dataset.o === "recount") { st.outsUser = false; render(); }
+    else if (b.dataset.own) { st.own = +b.dataset.own; st.src = "own"; st.horizon = "river"; render(); }
     else if (b.dataset.hz) { st.horizon = b.dataset.hz; render(); }
     else if (b.dataset.bet) { st.bet = r2(Math.max(0.01, st.p0 * +b.dataset.bet)); render(); }
   });
