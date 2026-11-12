@@ -5,6 +5,7 @@ import {createDock,solverPalette,notesPalette} from "./dock.js";
 import {createNotes} from "./notes.js";
 import {createOdds,createStove} from "./tools.js";
 import {createCombos} from "./combos.js";
+import {createMini} from "./mini.js";
 import {createCharts} from "./charts.js";
 import {BOT_TYPES,BOT_ORDER,botLabel,decide as botDecide,thinkMs} from "./bots.js";
 
@@ -205,6 +206,14 @@ function stoveAllowed(){
 // odds calculator and preflop charts: on for students unless the teacher turns them off
 const toolOk=k=>!!mode&&(isT()||mode==="local"||((view()&&view().rules&&view().rules[k+"Students"])||"always")!=="off");
 function setView(v){viewMode=v;lsSet("hsp-view",v);render()}
+// mini table: floats in a corner while the table is scrolled out of view (or hidden by the Solver view)
+const MINI=createMini({
+  active:()=>!!mode&&!$("#game").hidden,
+  label:()=>{const P=view();if(!P) return "Table";const st=P.phase==="done"?"Hand over":P.phase==="idle"?"Between hands":P.phase.charAt(0).toUpperCase()+P.phase.slice(1);return `${st} · Hand #${P.hand||0} · Pot ${money(P.seats.reduce((a,s)=>a+(s.total||0),0))}`},
+  isMyTurn:()=>{const P=view();return !!P&&!isT()&&mySeat>=0&&P.toAct===mySeat},
+  goHome:()=>{if(viewMode==="solver") setView("both")}
+});
+{const mo=document.getElementById("miniOn"); if(mo) mo.checked=MINI.isOn();}
 function applyView(){
   const ok=solverAllowed(), v=ok?viewMode:"table";
   document.body.classList.toggle("v-table",v==="table");document.body.classList.toggle("v-solver",v==="solver");document.body.classList.toggle("v-both",v==="both");
@@ -327,6 +336,7 @@ window.addEventListener("blur",release);
 
 function renderNow(){
   const inL=!!mode;
+  if(inL&&$("#game").hidden) scrollTo(0,0); // opening a table starts at the top, not wherever the home page was scrolled
   $("#home").hidden=inL; $("#game").hidden=!inL; $("#leaveBtn").hidden=!inL;
   $("#themeBtn").textContent=document.documentElement.dataset.theme==="light"?"Dark mode":"Light mode";
   const lc=$("#lobbyChip"); lc.hidden=!inL; if(inL) lc.textContent=mode==="local"?"Practice table":`${(E.G&&E.G.lname)||(PUB&&PUB.lname)||L.name} · ${L.id.toUpperCase()}`;
@@ -344,7 +354,7 @@ function renderNow(){
   setHTML($("#log"),P.log.slice().reverse().map(t=>`<li>${esc(t)}</li>`).join("")||`<li class="muted">No hands yet.</li>`);
   if(T) renderTeacherSide(); else setSide(soloStu()?soloSide(P):studentSide(P));
   if(picker&&!T) picker=null;
-  drawPicker(); drawCursors(); tick(); botPump(); autoDeal();
+  drawPicker(); drawCursors(); tick(); botPump(); autoDeal(); MINI.sync(); MINI.check();
 }
 /* the table is a racetrack (straight sides, round ends); seats, bets and the button sit on smaller
    racetracks inside it. t runs 0..1 around the track, starting bottom centre and going left first.
@@ -857,6 +867,7 @@ document.addEventListener("input",e=>{
   else if(t.id==="dcMsg"){dcMsg=t.value}
 });
 document.addEventListener("change",e=>{
+  if(e.target.id==="miniOn"){MINI.setOn(e.target.checked);return}
   if(e.target.dataset.tool){setTool(e.target.dataset.tool,e.target.checked);return}
   const t=e.target;
   if(mode&&t.dataset.bot!=null&&(isT()||soloStu())){const i=+t.dataset.bot;botOp({t:"bot",i,v:t.value||(soloStu()?"balanced":null)});return}

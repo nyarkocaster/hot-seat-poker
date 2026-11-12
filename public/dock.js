@@ -22,6 +22,8 @@ export function createPalette(host, units, defaults, key, opt = {}) {
   const cols = [...dock.children];
   const wraps = new Map(); // unit id -> window element
   const homes = new Map(); // moved element -> placeholder comment at its original spot
+  // an element floating in the mini table is represented in the page by its placeholder: move that instead
+  const stand = el => (el && el.id && el.closest && el.closest("#miniTable") && document.querySelector(`.minihome[data-for="${el.id}"]`)) || el;
   let view = null, onChange = null, zoom = {};
 
   const unitsFor = v => units.filter(u => !u.views || u.views.includes(v));
@@ -69,12 +71,13 @@ export function createPalette(host, units, defaults, key, opt = {}) {
   function gather(u, w) {
     const body = w.lastElementChild;
     u.sel.forEach(sel => {
-      const el = typeof sel === "string" ? document.querySelector(sel) : sel();
+      const el0 = typeof sel === "string" ? document.querySelector(sel) : sel();
+      const el = stand(el0);
       if (!el || body.contains(el)) return;
-      if (!homes.has(el)) { const ph = document.createComment("dock:" + sel); el.before(ph); homes.set(el, ph); }
+      if (!homes.has(el0)) { const ph = document.createComment("dock:" + sel); el.before(ph); homes.set(el0, ph); }
       body.appendChild(el);
     });
-    u.sel.forEach(sel => { const el = typeof sel === "string" ? body.querySelector(":scope > " + sel) : null; if (el) body.appendChild(el); });
+    u.sel.forEach(sel => { const el = typeof sel === "string" ? stand(document.querySelector(sel)) : null; if (el && el.parentNode === body) body.appendChild(el); });
   }
 
   // turn the palette on for a view, or off (null); safe to call on every render
@@ -93,7 +96,7 @@ export function createPalette(host, units, defaults, key, opt = {}) {
     unitsFor(view).forEach(u => gather(u, wrapFor(u)));
   }
   function release() {
-    homes.forEach((ph, el) => { if (ph.isConnected) ph.replaceWith(el); else el.remove(); });
+    homes.forEach((ph, el) => { const x = stand(el); if (ph.isConnected) ph.replaceWith(x); else x.remove(); });
     homes.clear();
     wraps.forEach(w => w.remove());
     dock.hidden = true; if (opt.bodyClass) document.body.classList.remove(opt.bodyClass);
