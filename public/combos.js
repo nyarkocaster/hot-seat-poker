@@ -55,7 +55,7 @@ function leftOf(dead) {
 }
 
 export function createCombos(el, opt = {}) {
-  let board = "", known = "", range = "", ext = null, focus = null, filt = null;
+  let board = "", known = "", range = "", ext = null, focus = null, filt = null, preset = "", presetKey = "";
   el.innerHTML = `
     <h2>Combo counter</h2>
     <div class="combos">
@@ -72,9 +72,15 @@ export function createCombos(el, opt = {}) {
       <div class="cout" aria-live="polite"></div>
     </div>`;
   const q = s => el.querySelector(s);
+  // the range menu: rebuilt only when what it lists changes (never while someone opens it), showing the range in use
   const fillPresets = () => {
     const S = opt.solver && opt.solver(), nm = S && S.names ? S.names() : null, nr = S && S.nodeRanges ? S.nodeRanges() : null;
-    q('[data-c="preset"]').innerHTML = `<option value="">Range…</option>${S ? `<optgroup label="From the solver">${[0, 1].map(k => `<option value="sv${k}">${esc(nm ? nm[k] : k ? "IP" : "OOP")} (${k ? "IP" : "OOP"})${nr ? " · at the spot on screen" : " · starting range"}</option>`).join("")}</optgroup>` : ""}<optgroup label="Charts">${presetOptions()}</optgroup>`;
+    if (!ext && preset && !preset.startsWith("sv") && PRESETS[preset] !== range) preset = "";
+    const key = JSON.stringify([!!S, nm, !!nr, Object.keys(PRESETS), Object.values(PRESETS)]);
+    const sel = q('[data-c="preset"]');
+    if (key !== presetKey) { presetKey = key; sel.innerHTML = `<option value="">Range…</option>${S ? `<optgroup label="From the solver">${[0, 1].map(k => `<option value="sv${k}">${esc(nm ? nm[k] : k ? "IP" : "OOP")} (${k ? "IP" : "OOP"})${nr ? " · at the spot on screen" : " · starting range"}</option>`).join("")}</optgroup>` : ""}<optgroup label="Charts">${presetOptions()}</optgroup>`; }
+    if (preset && ![...sel.options].some(o => o.value === preset)) preset = "";
+    sel.value = preset;
   };
 
   function parsed() {
@@ -114,6 +120,7 @@ export function createCombos(el, opt = {}) {
 
   function draw() {
     const out = q(".cout");
+    fillPresets();
     const { b, k, err, combos, rerr } = parsed();
     if (err || rerr) { out.innerHTML = `<p class="err">${esc(err || rerr)}</p>`; return; }
     const R = countCombos({ board: b, known: k, combos });
@@ -159,16 +166,14 @@ export function createCombos(el, opt = {}) {
     const t = e.target, c = t.dataset.c;
     if (c === "board") { board = t.value; draw(); }
     else if (c === "known") { known = t.value; draw(); }
-    else if (c === "range") { range = t.value; ext = null; filt = null; draw(); }
+    else if (c === "range") { range = t.value; ext = null; filt = null; preset = ""; draw(); }
   });
   el.addEventListener("change", e => {
     const t = e.target; if (t.dataset.c !== "preset" || !t.value) return;
-    const v = t.value; t.value = "";
-    if (v.startsWith("sv")) fromSolver(+v[2]);
-    else { ext = null; range = PRESETS[v] || ""; q('[data-c="range"]').value = range; filt = null; draw(); }
+    const v = t.value;
+    if (v.startsWith("sv")) { fromSolver(+v[2]); preset = ext || range ? v : ""; draw(); }
+    else { ext = null; preset = v; range = PRESETS[v] || ""; const r = q('[data-c="range"]'); r.value = range; r.placeholder = "Like QQ+,AKs,AQo or 22+:0.5"; filt = null; focus = null; draw(); }
   });
-  el.addEventListener("focusin", e => { if (e.target.dataset.c === "preset") fillPresets(); });
-  el.addEventListener("pointerdown", e => { if (e.target.closest && e.target.closest('[data-c="preset"]')) fillPresets(); });
   el.addEventListener("click", e => {
     const t = e.target.closest("button"); if (!t) return;
     if (t.dataset.cell != null) { const i = +t.dataset.cell; focus = focus === i ? null : i; draw(); return; }
@@ -176,7 +181,7 @@ export function createCombos(el, opt = {}) {
     const c = t.dataset.c;
     if (c === "unfocus") { focus = null; draw(); }
     else if (c === "unfilter") { filt = null; draw(); }
-    else if (c === "clear") setAll("", "", "");
+    else if (c === "clear") { preset = ""; setAll("", "", ""); }
     else if (c === "table") fromTable();
     else if (c === "solver") fromSolver(null);
   });
@@ -207,8 +212,7 @@ export function createCombos(el, opt = {}) {
     setAll(sp && sp.board ? sp.board.map(cardStr).join(" ") : board, known, r || "", null);
     if (!r && opt.flash) opt.flash(`The solver's ${nm[k]} range is blank`);
   }
-  fillPresets();
   draw();
-  addEventListener("hsp-charts", fillPresets);
+  addEventListener("hsp-charts", () => draw());
   return { draw, fromTable, fromSolver, setAll, state: () => ({ board, known, range }) };
 }
