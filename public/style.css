@@ -642,3 +642,6 @@ details.types dd{margin:0 0 6px}
 .minitoast{position:fixed;z-index:61;left:50%;bottom:16px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100vw - 24px);
   background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 6px 6px 12px;font-size:13px}
 .minitoast[hidden]{display:none}
+/* minimized bar: a solid gold border so it stands out over the page */
+.mini.min{border:2px solid var(--gold);outline:0}
+.mini.min.turn{outline:2px solid var(--gold);outline-offset:2px}
