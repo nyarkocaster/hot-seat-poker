@@ -211,7 +211,8 @@ const MINI=createMini({
   active:()=>!!mode&&!$("#game").hidden,
   label:()=>{const P=view();if(!P) return "Table";const st=P.phase==="done"?"Hand over":P.phase==="idle"?"Between hands":P.phase.charAt(0).toUpperCase()+P.phase.slice(1);return `${st} · Hand #${P.hand||0} · Pot ${money(P.seats.reduce((a,s)=>a+(s.total||0),0))}`},
   isMyTurn:()=>{const P=view();return !!P&&!isT()&&mySeat>=0&&P.toAct===mySeat},
-  goHome:()=>{if(viewMode==="solver") setView("both")}
+  goHome:()=>{if(viewMode==="solver") setView("both")},
+  onToggle:v=>{const mo=document.getElementById("miniOn"); if(mo) mo.checked=v}
 });
 {const mo=document.getElementById("miniOn"); if(mo) mo.checked=MINI.isOn();}
 function applyView(){

@@ -626,3 +626,19 @@ details.types dd{margin:0 0 6px}
 .mini:not(.big) #actPanel .who{font-size:12px;margin-bottom:4px}
 .mini:not(.big) #actPanel .row{gap:6px;flex-wrap:nowrap}
 .mini:not(.big) #actPanel .b{padding:6px 4px;font-size:13.5px;min-height:34px;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* odds calculator: sections fold by their heading */
+.osec .obody{display:flex;flex-direction:column;gap:8px}
+.osec.shut .obody{display:none}
+.ofold{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;cursor:pointer;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit}
+.ofold span:first-child{flex:1}
+.ofold:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+.ochev{transition:transform .15s ease;font-size:12px}
+.osec.shut .ochev{transform:rotate(-90deg)}
+.osec.shut{padding-block:8px}
+/* mini table: minimized to its title bar */
+.mini.min .minibody,.mini.min .minisz,.mini.min [data-mini="size"]{display:none}
+.mini.min .minibar{border-bottom:0;cursor:pointer}
+.mini.min.turn{background:color-mix(in srgb,var(--gold) 22%,var(--panel))}
+.minitoast{position:fixed;z-index:61;left:50%;bottom:16px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100vw - 24px);
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 6px 6px 12px;font-size:13px}
+.minitoast[hidden]{display:none}

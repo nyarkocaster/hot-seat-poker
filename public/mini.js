@@ -7,8 +7,8 @@ const BASE = 640, MINW = 240;
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { return {}; } };
 const save = o => { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} };
 
-export function createMini({ active, label, goHome, isMyTurn }) {
-  const pref = Object.assign({ on: true, big: false, x: null, y: null, w: null }, load());
+export function createMini({ active, label, goHome, isMyTurn, onToggle }) {
+  const pref = Object.assign({ on: true, big: false, min: false, x: null, y: null, w: null }, load());
   const ids = ["table", "actPanel"];
   const box = document.createElement("div");
   box.id = "miniTable"; box.className = "mini"; box.hidden = true;
@@ -16,6 +16,7 @@ export function createMini({ active, label, goHome, isMyTurn }) {
   box.innerHTML = `<div class="minibar" data-mini="drag" title="Drag to move">
       <span class="minigrip" aria-hidden="true">⋮⋮</span><span class="minittl"></span>
       <button type="button" class="minib" data-mini="size" aria-label="Show all the action buttons"></button>
+      <button type="button" class="minib" data-mini="min"></button>
       <button type="button" class="minib" data-mini="home" aria-label="Back to the table" title="Back to the table">⤢</button>
       <button type="button" class="minib" data-mini="close" aria-label="Close the mini table" title="Close (it comes back next time you scroll away)">×</button>
     </div><div class="minibody"></div><div class="minisz" data-mini="resize" title="Drag to resize" aria-hidden="true"></div>`;
@@ -60,6 +61,11 @@ export function createMini({ active, label, goHome, isMyTurn }) {
     box.classList.toggle("turn", !!(isMyTurn && isMyTurn()));
     const sb = box.querySelector('[data-mini="size"]');
     sb.textContent = pref.big ? "−" : "⋯"; const t = pref.big ? "Fewer buttons" : "All the action buttons (bet sizes, undo…)"; sb.setAttribute("aria-label", t); sb.title = t;
+    box.classList.toggle("min", !!pref.min);
+    const mb = box.querySelector('[data-mini="min"]');
+    mb.textContent = pref.min ? "▴" : "▁"; const mt = pref.min ? "Open the mini table" : "Minimize to a bar"; mb.setAttribute("aria-label", mt); mb.title = mt;
+    mb.setAttribute("aria-expanded", String(!pref.min));
+    if (pref.min && isMyTurn && isMyTurn()) ttl.textContent = "Your turn · " + ttl.textContent;
     fit();
   }
   const maxW = () => Math.max(MINW, Math.min(1000, innerWidth - 16));
@@ -89,7 +95,7 @@ export function createMini({ active, label, goHome, isMyTurn }) {
     if (!sz && (!bar || e.target.closest("button"))) return;
     const r = box.getBoundingClientRect();
     drag = sz ? { resize: box.classList.contains("right") ? "l" : "r", x0: e.clientX, w0: r.width, left0: r.left, id: e.pointerId }
-      : { dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId };
+      : { dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId, sx: e.clientX, sy: e.clientY };
     (sz || bar).setPointerCapture(e.pointerId); box.classList.add("dragging"); e.preventDefault();
   });
   box.addEventListener("pointermove", e => {
@@ -102,12 +108,17 @@ export function createMini({ active, label, goHome, isMyTurn }) {
     }
     pref.x = e.clientX - drag.dx; pref.y = e.clientY - drag.dy; place();
   });
-  const endDrag = e => { if (!drag || e.pointerId !== drag.id) return; drag = null; box.classList.remove("dragging"); const r = box.getBoundingClientRect(); pref.x = r.left; pref.y = r.top; save(pref); };
+  const endDrag = e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const tap = !drag.resize && e.type === "pointerup" && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 5;
+    if (tap && pref.min) { drag = null; box.classList.remove("dragging"); setMin(false); return; }
+    drag = null; box.classList.remove("dragging"); const r = box.getBoundingClientRect(); pref.x = r.left; pref.y = r.top; save(pref); };
   box.addEventListener("pointerup", endDrag); box.addEventListener("pointercancel", endDrag);
   box.addEventListener("click", e => {
     const b = e.target.closest("[data-mini]"); if (!b || b.dataset.mini === "drag") return;
     const c = b.dataset.mini;
-    if (c === "close") { dismissed = true; dock(); }
+    if (c === "close") { dismissed = true; dock(); offerOff(); }
+    else if (c === "min") setMin(!pref.min);
     else if (c === "size") { pref.big = !pref.big; save(pref); sync(); place(); }
     else if (c === "home") {
       const ph = holders[0];
@@ -115,6 +126,30 @@ export function createMini({ active, label, goHome, isMyTurn }) {
       requestAnimationFrame(() => { const h = homeEl(); if (h) h.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }); });
     }
   });
+  function setMin(v) {
+    // keep the bar where it is: shrink up from the bottom edge, grow back the same way
+    const r = box.getBoundingClientRect(); pref.min = !!v; sync();
+    const r2 = box.getBoundingClientRect(); pref.x = r.left; pref.y = r.bottom - r2.height; place(); save(pref);
+  }
+  // after ×: offer to stop the pop-out for good (also in Tools → Mini table)
+  let toast = null, toastT = 0;
+  function offerOff() {
+    if (!toast) {
+      toast = document.createElement("div"); toast.className = "minitoast"; toast.setAttribute("role", "status");
+      toast.addEventListener("click", e => {
+        const b = e.target.closest("[data-x]"); if (!b) return;
+        if (b.dataset.x === "off") {
+          pref.on = false; save(pref); if (onToggle) onToggle(false);
+          toast.innerHTML = `<span>Mini table off. Turn it back on in Tools → Mini table.</span>`;
+          clearTimeout(toastT); toastT = setTimeout(() => { toast.hidden = true; }, 4000);
+        } else toast.hidden = true;
+      });
+      document.body.appendChild(toast);
+    }
+    toast.innerHTML = `<span>Mini table closed. It comes back when you scroll away again.</span><button type="button" class="b sm" data-x="off">Turn it off</button><button type="button" class="minib" data-x="hide" aria-label="Dismiss">×</button>`;
+    toast.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(() => { toast.hidden = true; }, 7000);
+  }
   let raf = 0;
   const soon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; check(); }); };
   addEventListener("scroll", soon, { passive: true, capture: true });

@@ -43,6 +43,14 @@ export function createOdds(el, opt = {}) {
     </div>`;
   const q = s => el.querySelector(s);
   const inp = k => q(`[data-o="${k}"]`);
+  // each numbered section folds away by its heading; remembered on this device
+  const folded = (() => { try { return JSON.parse(localStorage.getItem("hsp-odds-fold") || "{}") || {}; } catch (e) { return {}; } })();
+  function put(n, html) {
+    const sec = q(`[data-sec="${n}"]`), m = html.match(/^\s*<h3>([\s\S]*?)<\/h3>/), shut = !!folded[n];
+    sec.classList.toggle("shut", shut);
+    if (!m) { sec.innerHTML = html; return; }
+    sec.innerHTML = `<h3><button type="button" class="ofold" data-fold="${n}" aria-expanded="${!shut}"><span>${m[1]}</span><span class="ochev" aria-hidden="true">▾</span></button></h3><div class="obody">${html.slice(m[0].length)}</div>`;
+  }
 
   function fromTable() {
     const P = opt.table && opt.table.current();
@@ -96,7 +104,7 @@ export function createOdds(el, opt = {}) {
       h1 += EQ("Equity you need", "To call ÷ (Pot + To call)", `${$$(C)} ÷ (${$$(P)} + ${$$(C)}) = ${nn(C)} ÷ ${nn(P + C)}`, pc(C / (P + C)));
       h1 += `<p class="why">You put in ${$$(C)} to win a pot that will be ${$$(P + C)}. If you win more than ${pc(C / (P + C))} of the time, calling pays off in the long run.</p>`;
     }
-    q('[data-sec="1"]').innerHTML = h1;
+    put(1, h1);
 
     // 2. equity
     const unseen = 52 - 2 - ({ preflop: 0, flop: 3, turn: 4, river: 5 }[st.street]);
@@ -144,7 +152,7 @@ export function createOdds(el, opt = {}) {
       h2 += `<label class="oown">Your equity (%) <input type="number" min="0" max="100" step="0.1" data-o="own" value="${r2(st.own)}"></label>`;
       E = Math.max(0, Math.min(100, st.own)) / 100; Elabel = "your estimate";
     }
-    q('[data-sec="2"]').innerHTML = h2;
+    put(2, h2);
 
     // 3. decision
     let h3 = `<h3>3. Is calling profitable?</h3>`;
@@ -162,7 +170,7 @@ export function createOdds(el, opt = {}) {
         h3 += `<p class="why">You'd need to win about ${$$(X)} more on later streets when you hit${A && A.allin && st.follow ? ", but someone is all in, so there's no more to win" : ""}.</p>`;
       }
     }
-    q('[data-sec="3"]').innerHTML = h3;
+    put(3, h3);
 
     // 4. betting
     const P0 = Math.max(0, st.p0), B = Math.max(0, st.bet);
@@ -175,7 +183,7 @@ export function createOdds(el, opt = {}) {
       h4 += EQ("Equity they need to call you", "Bet ÷ (Pot + 2 × Bet)", `${$$(B)} ÷ (${$$(P0)} + 2 × ${$$(B)}) = ${nn(B)} ÷ ${nn(P0 + 2 * B)}`, pc(B / (P0 + 2 * B)));
       h4 += `<p class="why">If they fold more than ${pc(B / (P0 + B))} of the time, a bluff with no chance to win still shows a profit. Bigger bets need more folds but give the caller a worse price.</p>`;
     }
-    q('[data-sec="4"]').innerHTML = h4;
+    put(4, h4);
   }
 
   const stopFollow = () => { if (st.follow) { st.follow = false; inp("follow").checked = false; } };
@@ -195,6 +203,7 @@ export function createOdds(el, opt = {}) {
   el.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.dataset.src) { st.src = b.dataset.src; render(); }
+    else if (b.dataset.fold) { const n = b.dataset.fold; folded[n] = !folded[n]; try { localStorage.setItem("hsp-odds-fold", JSON.stringify(folded)); } catch (e) {} render(); }
     else if (b.dataset.outs) { st.outs = +b.dataset.outs; st.outsUser = true; render(); }
     else if (b.dataset.o === "recount") { st.outsUser = false; render(); }
     else if (b.dataset.own) { st.own = +b.dataset.own; st.src = "own"; st.horizon = "river"; render(); }
