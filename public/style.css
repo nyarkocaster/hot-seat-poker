@@ -600,33 +600,29 @@ details.types dd{margin:0 0 6px}
 .orr{border-left:3px solid var(--gold);padding:6px 10px;margin:6px 0;font-size:13.5px}
 .orr p{margin:0 0 6px}
 /* mini table (floats in a corner while you scroll away from the table) */
-.mini{position:fixed;z-index:60;width:min(380px,calc(100vw - 16px));max-height:calc(100dvh - 16px);display:flex;flex-direction:column;
+.mini{position:fixed;z-index:60;width:400px;max-height:calc(100dvh - 16px);display:flex;flex-direction:column;
   background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;touch-action:none}
-.mini.big{width:min(560px,calc(100vw - 16px))}
 .mini.turn{border-color:var(--gold);outline:2px solid var(--gold)}
 .mini[hidden]{display:none}
-.minibar{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;cursor:grab;user-select:none;-webkit-user-select:none;border-bottom:1px solid var(--line);touch-action:none}
+.minibar{display:flex;align-items:center;gap:4px;padding:3px 4px 3px 10px;cursor:grab;user-select:none;-webkit-user-select:none;border-bottom:1px solid var(--line);touch-action:none}
 .mini.dragging .minibar{cursor:grabbing}
+.mini.dragging{user-select:none;-webkit-user-select:none}
 .minigrip{color:var(--muted);letter-spacing:-2px;font-size:12px}
 .minittl{flex:1;min-width:0;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .minib{border:0;background:none;color:var(--ink);font:inherit;font-size:18px;line-height:1;width:32px;height:32px;border-radius:6px;cursor:pointer;display:grid;place-items:center}
 .minib:hover{background:color-mix(in srgb,var(--gold) 18%,transparent)}
 .minib:focus-visible{outline:2px solid var(--gold)}
-.minibody{overflow:auto;overscroll-behavior:contain;touch-action:pan-y}
-.mini .table{min-height:0;margin:16px 10px 20px;width:auto}
-.mini #actPanel{margin:0;border:0;border-top:1px solid var(--line);border-radius:0;padding:8px 10px;font-size:13px}
-.mini #actPanel .optsum{display:none}
+.minibody{overflow:auto;overscroll-behavior:contain;touch-action:pan-y;padding:0 8px}
+/* the table keeps its full-size layout (640px wide) and is scaled down as a whole */
+.mini .table{width:640px;max-width:none;min-height:0;margin:28px 0 34px;zoom:var(--mz,.6)}
+.mini #actPanel{margin:0 -8px;border:0;border-top:1px solid var(--line);border-radius:0;padding:8px 10px 14px;font-size:13px}
 .minihome{width:100%}
-@media (prefers-reduced-motion:no-preference){.mini{transition:width .15s ease}}
-/* the small mini window keeps just the main buttons; + (bigger) shows the full action bar */
+.minisz{position:absolute;bottom:0;right:0;width:18px;height:18px;z-index:2;cursor:nwse-resize;touch-action:none;
+  background:linear-gradient(135deg,transparent 0 55%,var(--muted) 55% 62%,transparent 62% 72%,var(--muted) 72% 79%,transparent 79%)}
+.mini.right .minisz{right:auto;left:0;cursor:nesw-resize;transform:scaleX(-1)}
+/* the normal window keeps just the main buttons; ⋯ shows the full action bar */
 .mini:not(.big) #actPanel .row~.row,.mini:not(.big) #actPanel .note,.mini:not(.big) #actPanel .row .b:not(.big):not(.primary):not([data-a]):not([data-cmd="deal"]):not([data-solo]),.mini:not(.big) #actPanel [data-poll],.mini:not(.big) #actPanel .optsum{display:none}
-.mini:not(.big) #actPanel{padding:6px 8px}
+.mini:not(.big) #actPanel{padding:6px 10px 14px}
 .mini:not(.big) #actPanel .who{font-size:12px;margin-bottom:4px}
 .mini:not(.big) #actPanel .row{gap:6px;flex-wrap:nowrap}
 .mini:not(.big) #actPanel .b{padding:6px 4px;font-size:13.5px;min-height:34px;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mini{width:min(340px,calc(100vw - 16px))}
-@media (max-width:600px){
-  .mini{width:min(300px,calc(100vw - 16px))}
-  .mini:not(.big) .table{zoom:.8;margin:14px 8px 16px}
-  .mini.big{width:calc(100vw - 16px)}
-}
