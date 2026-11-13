@@ -25,6 +25,8 @@ let myName=lsGet("hsp-name")||"";
 
 /* ---------- connection ---------- */
 let mode=null, ROLE=null, L=null, TCODE="";
+// HOST: you hold this lobby's host code (delete it, set its password and Discord); CANTEACH: you may teach here
+let HOST=false, CANTEACH=false, hostDel=false;
 let ws=null, wsOpen=false, wantWs=false, retry=0, retryT=null, pingT=null, lastErr="";
 let PUB=null, MINE=null, HIST=0, peers=[], myPeer=null, skew=0, welcomed=false;
 const curs=new Map();
@@ -36,6 +38,12 @@ let DSDK=null;
 const codes=()=>lsGet("hsp-codes")||{};
 function saveCode(id,code){const c=codes();c[id]=code;lsSet("hsp-codes",c)}
 function forgetCode(id){const c=codes();delete c[id];lsSet("hsp-codes",c)}
+// teacher passes: given by a teacher in the lobby, kept on this device so reconnecting keeps you a teacher
+const tts=()=>lsGet("hsp-tts")||{};
+function saveTT(id,t){const c=tts();if(t) c[id]=t; else delete c[id];lsSet("hsp-tts",c)}
+// whether you last chose to be a teacher or a student in each lobby
+const asPref=id=>(lsGet("hsp-as")||{})[id]||"teacher";
+function saveAs(id,v){const c=lsGet("hsp-as")||{};c[id]=v;lsSet("hsp-as",c)}
 // passwords for locked lobbies, kept on this device so reconnecting doesn't ask again
 const pws=()=>lsGet("hsp-pws")||{};
 function savePw(id,pw){const c=pws();if(pw) c[id]=pw; else delete c[id];lsSet("hsp-pws",c)}
@@ -49,7 +57,7 @@ const isT=()=>ROLE==="teacher"&&!!E.G&&!soloStu();
 function connect(){
   clearTimeout(retryT); if(!L||!wantWs) return;
   const s=new WebSocket(`${location.protocol==="https:"?"wss:":"ws:"}//${location.host}/ws/${L.id}`); ws=s;
-  s.onopen=()=>{if(ws!==s) return;retry=0;wsOpen=true;s.send(JSON.stringify({t:"hello",cid:ME.cid,tok:ME.tok,name:myName,role:ROLE,code:ROLE==="teacher"?TCODE:undefined,pw:ROLE==="teacher"?undefined:pws()[L.id]}));sendCur(true);updateConn()};
+  s.onopen=()=>{if(ws!==s) return;retry=0;wsOpen=true;s.send(JSON.stringify({t:"hello",cid:ME.cid,tok:ME.tok,name:myName,role:ROLE,code:TCODE||codes()[L.id]||undefined,tt:tts()[L.id]||undefined,pw:pws()[L.id]}));sendCur(true);updateConn()};
   s.onmessage=e=>{if(ws!==s) return;let m;try{m=JSON.parse(e.data)}catch(x){return}onMsg(m)};
   s.onclose=e=>{
     if(ws!==s) return; wsOpen=false; ws=null;
@@ -68,7 +76,19 @@ function connect(){
 }
 function wsSend(o){if(ws&&wsOpen){ws.send(JSON.stringify(o));return true}flash("Reconnecting… try again in a moment.");return false}
 function onMsg(m){
-  if(m.t==="welcome"){welcomed=true;myPeer=m.peer;if(m.lobby&&L){L.name=m.lobby.name;L.locked=!!m.lobby.locked;L.discord=!!m.lobby.discord}pwFor=null;if(ROLE==="teacher") saveCode(L.id,TCODE);updateConn()}
+  if(m.t==="welcome"){
+    const was=welcomed?ROLE:null;
+    welcomed=true;myPeer=m.peer;if(m.lobby&&L){L.name=m.lobby.name;L.locked=!!m.lobby.locked;L.discord=!!m.lobby.discord}pwFor=null;
+    ROLE=m.role==="teacher"?"teacher":"student"; HOST=!!m.host; CANTEACH=!!m.canTeach;
+    if(m.tt) saveTT(L.id,m.tt); if(m.ttGone) saveTT(L.id,null);
+    if(HOST&&TCODE) saveCode(L.id,TCODE);
+    if(was&&was!==ROLE){ // a hand-off: the same lobby, a different role
+      picker=null; hostDel=false;
+      if(ROLE==="student"){E.G=null;HIST=0} else {PUB=null;MINE=null}
+      saveAs(L.id,ROLE);
+      flash(ROLE==="teacher"?"You're teaching now":"You're a student now. Tap an open seat to sit down");
+    }
+    updateConn();render()}
   else if(m.t==="state"){skew=(+m.now||Date.now())-Date.now();if(m.g){E.G=m.g;HIST=m.hist||0}else{PUB=m.pub;MINE=m.mine||null}render()}
   else if(m.t==="peers"){peers=Array.isArray(m.list)?m.list:[];for(const k of [...curs.keys()]) if(!peers.some(p=>p.peer===k)) curs.delete(k);updateConn();render();drawCursors()}
   else if(m.t==="cur"){if(!m.cur&&!(m.busy&&m.busy.length)) curs.delete(m.peer); else curs.set(m.peer,m);drawCursors();if(picker) render()}
@@ -291,7 +311,7 @@ async function createLobby(){
   lsSet("hsp-name",myName);
   const name=($("#newName").value||"").trim().slice(0,28)||`${myName}'s table`;
   const code=($("#newCode").value||"").trim();
-  if(code.replace(/\s/g,"").length<4){homeErr("The teacher code needs at least 4 letters or numbers.");$("#newCode").focus();return}
+  if(code.replace(/\s/g,"").length<4){homeErr("The host code needs at least 4 letters or numbers.");$("#newCode").focus();return}
   const btn=$("#createBtn"); btn.disabled=true;
   try{
     const pw=($("#newPw").value||"").trim();
@@ -542,7 +562,7 @@ function renderTeacherSide(){
       ${confirmReset?`<span class="confirm"><span>Reset table, stacks and log?</span><button class="b sm warn" type="button" data-cmd="reset">Reset</button><button class="b sm" type="button" data-cmd="noreset">Keep</button></span>`:`<button class="b warn" type="button" data-cmd="askreset">Reset table…</button>`}</div></div></div>`;
   } else {
     h+=lockGroup()+dcGroup()+`<div class="students" id="stuList"></div>
-      ${local?"":L.discord?`<p class="note">This table belongs to a Discord call. People can also join from a web browser, outside Discord, with this link: <b class="sel">${esc(SITE)}/play/#lobby-${esc(L.id)}</b>${L.locked?" (they'll need the password)":""}. To run it from your own browser instead, press <b>Open in browser</b> at the top; you stay the teacher there.`:`<p class="note">Students open <b>${esc(location.host)}/play</b>, pick <b>${esc(G.lname||L.name)}</b> from the lobby list, and tap an open seat. Or send them this link: <b>${esc(location.origin)}/play/#lobby-${esc(L.id)}</b>. Co-teachers join with the teacher code; you'll see each other's pointers, and a colored outline marks whatever another teacher is editing.</p>`}`;
+      ${local?"":L.discord?`<p class="note">This table belongs to a Discord call. People can also join from a web browser, outside Discord, with this link: <b class="sel">${esc(SITE)}/play/#lobby-${esc(L.id)}</b>${L.locked?" (they'll need the password)":""}. To run it from your own browser instead, press <b>Open in browser</b> at the top; you stay the teacher there.`:`<p class="note">Students open <b>${esc(location.host)}/play</b>, pick <b>${esc(G.lname||L.name)}</b> from the lobby list, and tap an open seat. Or send them this link: <b>${esc(location.origin)}/play/#lobby-${esc(L.id)}</b>. Make someone a co-teacher from their name below; you'll see each other's pointers, and a colored outline marks whatever another teacher is editing.</p>`}`;
   }
   h+=`</div>`;
   setSide(h); renderPeople();
@@ -554,31 +574,52 @@ function renderPeople(){
   if(mode==="local"){setHTML(el,`<p class="note">Practice table: it runs on this device only, so nobody else can join.</p>`);return}
   const nm=p=>esc(p.name||"Someone");
   const T=peers.filter(p=>p.role==="teacher"), Ss=peers.filter(p=>p.role==="student");
-  let h=`<div class="sub">Teachers</div>`+T.map(p=>`<div class="stu"><span><span class="sw" style="background:${colOf(p.peer)}"></span>${nm(p)}${p.peer===myPeer?' <span class="muted">(you)</span>':""}</span><span class="muted">Teacher</span></div>`).join("");
-  h+=`<div class="sub">Students</div>`+(Ss.length?Ss.map(p=>`<div class="stu"><span>${nm(p)}</span><span class="muted">${p.seat>=0?"Seat "+(p.seat+1):"Watching"}</span></div>`).join(""):`<p class="note">No students here yet.</p>`);
+  const tag=p=>p.host?` <span class="chip host">Host</span>`:"";
+  const me=p=>p.peer===myPeer?' <span class="muted">(you)</span>':"";
+  let h=`<div class="sub">Teachers</div>`+T.map(p=>`<div class="stu"><span><span class="sw" style="background:${colOf(p.peer)}"></span>${nm(p)}${tag(p)}${me(p)}</span>
+    <span class="ops">${p.peer===myPeer?`<button class="b sm" type="button" data-role="self" data-as="student">Become a student</button>`:HOST&&!p.host?`<button class="b sm" type="button" data-role="revoke" data-peer="${esc(p.peer)}">Remove as teacher</button>`:`<span class="muted">Teacher</span>`}</span></div>`).join("");
+  h+=`<div class="sub">Students</div>`+(Ss.length?Ss.map(p=>`<div class="stu"><span>${nm(p)}${tag(p)}${me(p)} <span class="muted">· ${p.seat>=0?"Seat "+(p.seat+1):"Watching"}</span></span>
+    <span class="ops"><button class="b sm primary" type="button" data-role="hand" data-peer="${esc(p.peer)}" title="${nm(p)} teaches; you become a student">Hand off</button><button class="b sm" type="button" data-role="give" data-peer="${esc(p.peer)}" title="${nm(p)} teaches with you">Make teacher</button></span></div>`).join(""):`<p class="note">No students here yet.</p>`);
+  h+=`<p class="note">Take turns in the hot seat: <b>Hand off</b> makes that student the teacher and you a student. <b>Make teacher</b> adds a co-teacher. A new teacher gives up their seat, since teachers see every card.${HOST?" As the host you can always teach again, even after handing off.":""}</p>`;
+  if(HOST) h+=hostDelHTML();
+  else h+=`<p class="note">Only the host can delete the lobby or change its password and Discord settings.</p>`;
   setHTML(el,h);
+}
+// the host: delete this lobby from inside it
+function hostDelHTML(){
+  return `<div class="row" style="margin-top:8px">${hostDel?`<span class="confirm"><span>Delete this lobby for everyone? This can't be undone.</span><button class="b sm warn" type="button" data-cmd="hostdel2">Delete</button><button class="b sm" type="button" data-cmd="hostdelno">Keep</button></span>`:`<button class="b sm warn" type="button" data-cmd="hostdel">Delete this lobby…</button>`}</div>`;
+}
+async function hostDelete(){
+  const code=TCODE||codes()[L&&L.id]; if(!L||!code){flash("Only the host can delete this lobby.");return}
+  try{
+    const r=await fetch(`/api/lobbies/${L.id}/delete`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({code})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){flash(j.error||"Couldn't delete the lobby.");return}
+    const id=L.id; forgetCode(id); saveTT(id,null); hostDel=false; leaveLobby(); homeErr("Lobby deleted."); loadLobbies();
+  }catch(e){flash("Couldn't reach the server.")}
 }
 /* ---------- Discord: post "the table is open" to the group's channel (teachers) ---------- */
 let DCS=null, dcNote=null, dcUrl="", dcMsg="", dcBusy=false;
 // teachers: lock the lobby with a student password, or open it again
 let lockDraft="";
 function lockGroup(){
-  if(mode!=="lobby"||!isT()||!L||L.discord) return "";
+  if(mode!=="lobby"||!isT()||!HOST||!L||L.discord) return "";
   return `<div class="group lockgrp"><h3>${L.locked?"🔒 Password":"Lobby access"}</h3>
-    <p class="note">${L.locked?"Students need the password to join. Teachers use the teacher code.":"Anyone with the lobby link or code can join as a student."}</p>
+    <p class="note">${L.locked?"Students need the password to join. The host and teachers don't.":"Anyone with the lobby link or code can join as a student."}</p>
     <div class="row dcrow"><input type="text" id="lockIn" maxlength="40" autocomplete="off" placeholder="${L.locked?"New password":"Set a password"}" value="${esc(lockDraft)}" aria-label="Student password"><button class="b sm" type="button" id="lockGo" data-cmd="lockgo">${L.locked?"Change":"Lock with password"}</button>${L.locked?`<button class="b sm" type="button" id="lockOff" data-cmd="lockoff">Remove password</button>`:""}</div>
     <p class="note">Changing it doesn't remove anyone already here.</p></div>`;
 }
 function dcGroup(){
   if(mode!=="lobby"||!isT()||!DCS) return "";
   const note=dcNote&&Date.now()-dcNote.at<20000?(dcNote.err?`<p class="err" role="status">${esc(dcNote.err)}</p>`:`<p class="note dcok" role="status">${esc(dcNote.ok)}</p>`):"";
+  if(!DCS.has&&!HOST) return "";
   if(!DCS.has) return `<div class="group dcgrp"><h3>Invite on Discord</h3>
     <p class="note">Post “the table is open” with a join link to your group's Discord channel. In Discord, open the channel's settings › <b>Integrations</b> › <b>Webhooks</b> › <b>New Webhook</b> › <b>Copy Webhook URL</b>, then paste it here.</p>
     <div class="row dcrow"><input type="url" id="dcUrl" placeholder="https://discord.com/api/webhooks/…" value="${esc(dcUrl)}" autocomplete="off" aria-label="Discord webhook link"><button class="b sm" type="button" data-cmd="dcset"${dcBusy?" disabled":""}>Save</button></div>${note}</div>`;
   const ago=DCS.last?Math.round((Date.now()-DCS.last)/60000):null;
   return `<div class="group dcgrp"><h3>Invite on Discord</h3>
-    <p class="note">Posting to the channel webhook ending in <code>${esc(DCS.hint)}</code>. <button type="button" class="linkbtn" data-cmd="dcclear">Remove</button></p>
-    <label class="toggle"><input type="checkbox" id="dcAuto"${DCS.auto?" checked":""}><span>Post automatically when a teacher opens the table<br><span class="note">At most once every 30 minutes.</span></span></label>
+    <p class="note">Posting to the channel webhook ending in <code>${esc(DCS.hint)}</code>.${HOST?` <button type="button" class="linkbtn" data-cmd="dcclear">Remove</button>`:""}</p>
+    ${HOST?`<label class="toggle"><input type="checkbox" id="dcAuto"${DCS.auto?" checked":""}><span>Post automatically when a teacher opens the table<br><span class="note">At most once every 30 minutes.</span></span></label>`:""}
     <div class="field"><label for="dcMsg">Message <span class="muted">(optional)</span></label><input type="text" id="dcMsg" maxlength="300" placeholder="Like “River bluffs tonight, all levels welcome”" value="${esc(dcMsg)}"></div>
     <div class="row dcrow"><button class="b primary sm" type="button" data-cmd="dcpost"${dcBusy?" disabled":""}>Post to Discord</button><label class="toggle sm"><input type="checkbox" id="dcHere"><span>Notify the channel (@here)</span></label></div>
     <p class="note">${ago==null?"Nothing posted yet.":`Last posted ${ago<1?"just now":ago<60?ago+" min ago":Math.round(ago/60)+" h ago"}.`}</p>${note}</div>`;
@@ -680,16 +721,19 @@ function studentSide(P){
   return `<div class="panel"><h2>You</h2><p style="margin:0 0 6px">Playing as <b>${esc(myName||"Student")}</b></p>
     <p class="note">${mySeat>=0?`You're in seat ${mySeat+1}. Only you and the teachers see your cards${P&&P.reveal?" (right now the teacher is showing everyone's)":""}.`:"Tap an open seat on the table to sit down."}</p>
     <p class="note">${teacherHere?"A teacher is at the table.":"No teacher is here right now. The table is saved, and play continues when one joins."}</p>
-    ${mySeat>=0?`<button class="b sm" type="button" data-leave="1">Leave seat</button>`:""}</div>`;
+    ${mySeat>=0?`<button class="b sm" type="button" data-leave="1">Leave seat</button>`:""}</div>
+    ${mode==="lobby"&&(CANTEACH||HOST)?`<div class="panel"><h2>${HOST?"You're the host":"You can teach"}</h2>
+      <p class="note">${HOST?"You're playing as a student. Teach again whenever you like; whoever's teaching now keeps teaching too.":"A teacher made you a teacher. Switch back whenever you like."}</p>
+      <button class="b sm primary" type="button" data-role="self" data-as="teacher">Teach</button>${HOST?hostDelHTML():""}</div>`:""}`;
 }
 function renderHome(){
   const live=homeList||[];
   let h;
   if(homeList==null) h=`<p class="note">${homeListErr?"Can't reach the server right now. Retrying…":"Loading lobbies…"}</p>`;
-  else h=live.length?live.map(l=>{const id=esc(l.id); const mine=!!codes()[l.id];
+  else h=live.length?live.map(l=>{const id=esc(l.id); const mine=!!codes()[l.id]||!!tts()[l.id], ownd=!!codes()[l.id];
     return `<div class="lob${l.live?" live":""}"><div><div class="ttl">${esc(String(l.name||"Lobby").slice(0,28))}</div>
       <div class="meta"><span class="dot ${l.live?"on":""}" style="display:inline-block;margin-right:5px"></span>${l.locked?"🔒 Password · ":""}${l.live?"Teacher here":"No teacher right now"} · code ${esc(String(l.id).toUpperCase())} · ${esc(String(l.stakes||"").slice(0,16))} · ${+l.seated||0}/${+l.size||0} seated${l.hand?` · hand #${+l.hand}`:""}</div></div>
-      <div class="row">${mine?`<button class="b sm primary" type="button" data-rejoin="${id}">Rejoin as teacher</button><button class="b sm" type="button" data-join="${id}">Join as student</button><button class="b sm" type="button" data-teach="${id}">Manage</button>`:`<button class="b sm primary" type="button" data-join="${id}">Join as student</button><button class="b sm" type="button" data-teach="${id}">Teach</button>`}</div></div>`}).join("")
+      <div class="row">${mine?`<button class="b sm primary" type="button" data-rejoin="${id}">Rejoin as teacher</button><button class="b sm" type="button" data-join="${id}">Join as student</button>${ownd?`<button class="b sm" type="button" data-teach="${id}">Manage</button>`:""}`:`<button class="b sm primary" type="button" data-join="${id}">Join as student</button><button class="b sm" type="button" data-teach="${id}">I'm the host</button>`}</div></div>`}).join("")
     :`<p class="note">No lobbies yet. Start one below.</p>`;
   setHTML($("#dirList"),h);
   $("#keyField").hidden=!needsKey;
@@ -792,6 +836,10 @@ document.addEventListener("click",e=>{
   if(t.id==="toolsBtn"){const m=$("#toolsMenu");m.hidden=!m.hidden;t.setAttribute("aria-expanded",String(!m.hidden));return}
   if(t.dataset.poll){pollClick(t);return}
   if(t.dataset.solo){soloCmd(t.dataset.solo);return}
+  if(t.dataset.role&&mode==="lobby"){wsSend({t:"role",op:t.dataset.role,peer:t.dataset.peer,as:t.dataset.as});return}
+  if(mode==="lobby"&&t.dataset.cmd==="hostdel"){hostDel=true;render();return}
+  if(mode==="lobby"&&t.dataset.cmd==="hostdelno"){hostDel=false;render();return}
+  if(mode==="lobby"&&t.dataset.cmd==="hostdel2"){hostDelete();return}
   if(t.closest("#solverRoot")) return;
   if(t.dataset.viewMode){setView(t.dataset.viewMode);return}
   if(t.dataset.svload!=null&&SV){const P=view();const sp=P&&(P.spots||[])[+t.dataset.svload];if(sp){SV.loadTableSpot(sp,P);if(viewMode==="table") setView(window.innerWidth>=1100?"both":"solver")}return}
@@ -815,11 +863,11 @@ document.addEventListener("click",e=>{
       enterLobby(id,"student");return}
     if(t.id==="pwGo"&&pwFor){const v=$("#pwIn").value.trim();if(!v){homeErr("Enter the password.");return}savePw(pwFor.id,v);const id=pwFor.id;pwFor=null;$("#pwIn").value="";enterLobby(id,"student");return}
     if(t.id==="pwNo"){pwFor=null;homeErr("");render();return}
-    if(t.dataset.rejoin){const c=codes()[t.dataset.rejoin];if(c) enterLobby(t.dataset.rejoin,"teacher",c); else {teachFor={id:t.dataset.rejoin,name:t.dataset.rejoin};render()}return}
+    if(t.dataset.rejoin){const c=codes()[t.dataset.rejoin];if(c||tts()[t.dataset.rejoin]) enterLobby(t.dataset.rejoin,"teacher",c||""); else {teachFor={id:t.dataset.rejoin,name:t.dataset.rejoin};render()}return}
     if(t.dataset.teach){const l=(homeList||[]).find(x=>x.id===t.dataset.teach);teachFor={id:t.dataset.teach,name:l?l.name:t.dataset.teach};delConfirm=false;$("#teachCode").value=codes()[teachFor.id]||"";render();$("#teachCode").focus();return}
     if(t.id==="teachCancel"){teachFor=null;render();return}
-    if(t.id==="teachGo"){const c=$("#teachCode").value.trim();if(!c){homeErr("Enter the teacher code.");return}enterLobby(teachFor.id,"teacher",c);teachFor=null;return}
-    if(t.id==="delAsk"){if(!$("#teachCode").value.trim()){homeErr("Enter the teacher code first.");$("#teachCode").focus();return}delConfirm=true;render();return}
+    if(t.id==="teachGo"){const c=$("#teachCode").value.trim();if(!c){homeErr("Enter the host code.");return}enterLobby(teachFor.id,"teacher",c);teachFor=null;return}
+    if(t.id==="delAsk"){if(!$("#teachCode").value.trim()){homeErr("Enter the host code first.");$("#teachCode").focus();return}delConfirm=true;render();return}
     if(t.id==="delNo"){delConfirm=false;render();return}
     if(t.id==="delGo"){deleteLobby(teachFor.id,$("#teachCode").value.trim());return}
     return;
@@ -914,19 +962,19 @@ function doAct(type){
 /* ---------- start ---------- */
 function openFromHash(){
   // #lobby-ID, or #lobby-ID/t-CODE when a teacher moves a table from Discord to their browser
-  const m=/^lobby-([a-z0-9]{3,12})(?:\/t-(.{4,120}))?$/i.exec((location.hash||"").slice(1)); if(!m||mode) return;
+  const m=/^lobby-([a-z0-9]{3,12})(?:\/(tt?)-(.{4,120}))?$/i.exec((location.hash||"").slice(1)); if(!m||mode) return;
   const id=m[1].toLowerCase();
-  if(m[2]){try{saveCode(id,decodeURIComponent(m[2]))}catch(e){} history.replaceState(null,"","#lobby-"+id)}
+  if(m[3]){try{const v=decodeURIComponent(m[3]); if(m[2].toLowerCase()==="tt") saveTT(id,v); else saveCode(id,v)}catch(e){} history.replaceState(null,"","#lobby-"+id)}
   const code=codes()[id];
   if(!myName){homeErr("Enter your name above and press Enter to join.");pendingHash=true;$("#homeName").focus();return}
-  if(code) enterLobby(id,"teacher",code); else enterLobby(id,"student");
+  if(code||tts()[id]) enterLobby(id,asPref(id),code||""); else enterLobby(id,"student");
 }
 window.addEventListener("hashchange",()=>{if(!mode&&!new URLSearchParams(location.search).has("frame_id")) openFromHash()});
 $("#homeName").value=myName; $("#newCode").value=suggestCode();
 updateConn(); render();
 // inside a Discord voice channel (an Activity): sign in with Discord and go straight to this call's table
 $("#dcOpen").onclick=()=>{ if(!L) return;
-  const url=`${SITE}/play/#lobby-${L.id}${ROLE==="teacher"&&TCODE?"/t-"+encodeURIComponent(TCODE):""}`;
+  const tp=tts()[L.id], url=`${SITE}/play/#lobby-${L.id}${HOST&&TCODE?"/t-"+encodeURIComponent(TCODE):ROLE==="teacher"&&tp?"/tt-"+encodeURIComponent(tp):""}`;
   if(DSDK) DSDK.openLink(url); else window.open(url,"_blank","noopener");
   flash(ROLE==="teacher"?"Opening your browser: you'll be the teacher there too":"Opening your browser");
 };

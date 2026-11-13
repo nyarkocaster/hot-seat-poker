@@ -49,19 +49,19 @@
         <p class="note">This lobby has a password. Ask the person running it.</p>
         <div class="row"><input type="password" id="pwIn" placeholder="Lobby password" autocomplete="off" aria-label="Lobby password" maxlength="40"><button class="b primary" type="button" id="pwGo">Join as student</button><button class="b" type="button" id="pwNo">Cancel</button></div>
       </div>
-      <div class="panel" id="teachForm" hidden><h2>Teach <span id="teachName"></span></h2>
-        <p class="note">Enter the teacher code for this lobby. Students join without one.</p>
-        <div class="row"><input type="password" id="teachCode" placeholder="Teacher code" autocomplete="off" aria-label="Teacher code"><button class="b primary" type="button" id="teachGo">Join as teacher</button><button class="b" type="button" id="teachCancel">Cancel</button></div>
+      <div class="panel" id="teachForm" hidden><h2>Host <span id="teachName"></span></h2>
+        <p class="note">Enter this lobby's host code. Students join without one, and teachers are made in the lobby.</p>
+        <div class="row"><input type="password" id="teachCode" placeholder="Host code" autocomplete="off" aria-label="Host code"><button class="b primary" type="button" id="teachGo">Join as host</button><button class="b" type="button" id="teachCancel">Cancel</button></div>
         <div class="row" style="margin-top:10px" id="delRow"><button class="b sm warn" type="button" id="delAsk">Delete this lobby…</button></div>
       </div>
       <div class="panel"><h2>Start a lobby</h2>
         <div class="fields">
           <div class="field" style="grid-column:1/-1"><label for="newName">Lobby name</label><input type="text" id="newName" maxlength="28" placeholder="Tuesday study group"></div>
-          <div class="field"><label for="newCode">Teacher code</label><input type="text" id="newCode" maxlength="40" autocomplete="off"></div>
+          <div class="field"><label for="newCode">Host code</label><input type="text" id="newCode" maxlength="40" autocomplete="off"></div>
           <div class="field"><label for="newPw">Student password <span class="muted">(optional)</span></label><input type="text" id="newPw" maxlength="40" autocomplete="off" placeholder="No password"></div>
           <div class="field" id="keyField" hidden><label for="newKey">Organizer key</label><input type="password" id="newKey" maxlength="80" autocomplete="off"></div>
         </div>
-        <p class="note">Give the teacher code only to people who should see every card and run the table with you. You'll need it to come back as a teacher, so write it down. With a student password, the lobby shows a lock and students need the password to join.</p>
+        <p class="note">The host code lets you come back as the host: you can delete the lobby, set its password and choose who teaches. Write it down and keep it to yourself; make co-teachers from inside the lobby instead. With a student password, the lobby shows a lock and students need the password to join.</p>
         <button class="b primary" type="button" id="createBtn">Create lobby</button>
       </div>
     </div>

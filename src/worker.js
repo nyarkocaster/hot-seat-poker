@@ -32,7 +32,7 @@ export default {
         let b; try{b=await req.json()}catch(e){return json({error:"Bad request."},400)}
         if(env.CREATE_KEY&&String(b.key||"")!==env.CREATE_KEY) return json({error:"This site needs the organizer key to start a lobby.",needsKey:true},403);
         const name=cleanName(b.name)||"Study table", code=normCode(b.code);
-        if(code.length<4) return json({error:"The teacher code needs at least 4 letters or numbers."},400);
+        if(code.length<4) return json({error:"The host code needs at least 4 letters or numbers."},400);
         const dir=dirStub(env); if((await dir.count())>=MAX_LOBBIES) return json({error:"There are too many lobbies. Delete an old one first."},429);
         const pw=String(b.pw||"").trim();
         if(pw&&(pw.length<3||pw.length>40)) return json({error:"The password needs 3 to 40 characters."},400);
@@ -114,7 +114,7 @@ export class Lobby extends DurableObject{
   async destroy(id,code){
     // Already gone (or never existed): just make sure no leftover list entry remains.
     if(!this.meta){await dirStub(this.env).remove(id);return {ok:true}}
-    if(!(await this.checkCode(code))) return {ok:false,error:"That teacher code doesn't match this lobby."};
+    if(!(await this.checkCode(code))) return {ok:false,error:"That host code doesn't match this lobby."};
     id=this.meta.id;
     // Clear this lobby first, so nothing it does while people disconnect can re-list it.
     this.meta=null; this.E.G=null; this.E.history.length=0; this.toks={}; this.lastDir=""; this.curs.clear(); this.sv=null; this.nb=null; this.poll=null; this.pf={}; this.dc={};
@@ -130,7 +130,7 @@ export class Lobby extends DurableObject{
     if(!ok) this.fails.push(now);
     return ok;
   }
-  // a password-protected lobby: students need the password (teachers use the teacher code)
+  // a password-protected lobby: students need the password (the host and teachers don't)
   async checkPw(pw){
     if(!this.meta.pw) return true;
     const now=Date.now(); this.fails=this.fails.filter(t=>now-t<60000);
@@ -198,9 +198,22 @@ export class Lobby extends DurableObject{
   }
   broadcastPoll(){for(const {ws,a} of this.sockets()) this.send(ws,this.pollFor(a))}
   svSockets(except){return this.sockets().filter(x=>x.ws!==except&&x.a.sv&&this.svOk(x.a))}
+  // everything a socket needs after it joins or its role changes
+  greet(ws,a,extra={}){
+    this.send(ws,{t:"welcome",role:a.role,host:!!a.host,canTeach:!!(a.host||a.tth),peer:a.peer,...extra,lobby:{id:this.meta.id,name:this.E.G.lname||this.meta.name,locked:!!this.meta.pw,discord:!!this.meta.private}});
+    this.send(ws,this.stateFor(a,this.E.pubView()));
+    for(const [peer,c] of this.curs) if(peer!==a.peer) this.send(ws,c);
+    a.sv=false; ws.serializeAttachment(a); this.svGate(ws,a);
+    this.send(ws,this.pollFor(a));
+    this.send(ws,{t:"pf",charts:this.pf||{}});
+    if(a.role==="teacher") this.send(ws,this.dcFor());
+  }
+  async ttHash(t){return sha(this.meta.id+"|tt|"+String(t).slice(0,64))}
+  // a teacher's seat is given up when they start teaching (teachers see every card)
+  unseatCid(cid){const G=this.E.G;const i=G.seats.findIndex((s,k)=>k<G.size&&s.uid===cid);if(i<0) return false;return this.E.runOp({t:"unseat",i})}
   broadcastPeers(){
     if(!this.E.G) return;
-    const list=this.sockets().map(({a})=>({peer:a.peer,name:a.name,role:a.role,seat:a.role==="student"?this.E.G.seats.findIndex((s,i)=>i<this.E.G.size&&s.uid===a.cid):-1}));
+    const list=this.sockets().map(({a})=>({peer:a.peer,name:a.name,role:a.role,host:!!a.host,seat:a.role==="student"?this.E.G.seats.findIndex((s,i)=>i<this.E.G.size&&s.uid===a.cid):-1}));
     for(const {ws} of this.sockets()) this.send(ws,{t:"peers",list});
   }
   async commit(){
@@ -237,18 +250,22 @@ export class Lobby extends DurableObject{
       const th=await sha(tok);
       if(this.toks[cid]&&this.toks[cid]!==th){this.send(ws,{t:"error",code:"bad",msg:"Please reload the page."});ws.close(4000,"Bad id");return}
       if(!this.toks[cid]){const keys=Object.keys(this.toks);if(keys.length>2000) delete this.toks[keys[0]];this.toks[cid]=th;await this.ctx.storage.put("toks",this.toks)}
-      const role=m.role==="teacher"?"teacher":"student";
-      if(role==="teacher"&&!(await this.checkCode(m.code))){this.send(ws,{t:"error",code:"badcode",msg:this.fails.length>=8?"Too many wrong codes. Wait a minute and try again.":"That teacher code doesn't match this lobby."});ws.close(4001,"Bad code");return}
-      if(role==="student"&&this.meta.pw&&!(await this.checkPw(m.pw))){this.send(ws,{t:"error",code:"needpw",msg:this.fails.length>=8?"Too many wrong passwords. Wait a minute and try again.":m.pw?"That password doesn't match this lobby.":"This lobby needs a password."});ws.close(4002,"Password");return}
-      Object.assign(a,{cid,role,name:cleanName(m.name)||(role==="teacher"?"Teacher":"Student")}); ws.serializeAttachment(a);
-      this.send(ws,{t:"welcome",role,peer:a.peer,lobby:{id:this.meta.id,name:this.E.G.lname||this.meta.name,locked:!!this.meta.pw,discord:!!this.meta.private}});
-      this.send(ws,this.stateFor(a,this.E.pubView()));
-      for(const [peer,c] of this.curs) if(peer!==a.peer) this.send(ws,c);
-      a.sv=false; ws.serializeAttachment(a); this.svGate(ws,a);
-      this.send(ws,this.pollFor(a));
-      this.send(ws,{t:"pf",charts:this.pf||{}});
+      // roles: the host holds the lobby's host code; teachers hold a pass a teacher gave them; everyone else is a student.
+      // People choose to come in as a teacher or a student, if they're allowed to teach.
+      const want=m.role==="teacher"?"teacher":"student";
+      let host=false, tth=null;
+      if(m.code){
+        if(await this.checkCode(m.code)) host=true;
+        else if(want==="teacher"&&!m.tt){this.send(ws,{t:"error",code:"badcode",msg:this.fails.length>=8?"Too many wrong codes. Wait a minute and try again.":"That host code doesn't match this lobby."});ws.close(4001,"Bad code");return}
+      }
+      if(!host&&m.tt){const h=await this.ttHash(m.tt); if(this.meta.tt&&this.meta.tt[h]) tth=h;}
+      const canTeach=host||!!tth;
+      if(want==="teacher"&&!canTeach&&!m.code&&!m.tt){this.send(ws,{t:"error",code:"badcode",msg:"You need the host code, or a teacher has to make you a teacher."});ws.close(4001,"Bad code");return}
+      const role=want==="teacher"&&canTeach?"teacher":"student";
+      if(!canTeach&&this.meta.pw&&!(await this.checkPw(m.pw))){this.send(ws,{t:"error",code:"needpw",msg:this.fails.length>=8?"Too many wrong passwords. Wait a minute and try again.":m.pw?"That password doesn't match this lobby.":"This lobby needs a password."});ws.close(4002,"Password");return}
+      Object.assign(a,{cid,role,host,tth,name:cleanName(m.name)||(role==="teacher"?"Teacher":"Student")}); ws.serializeAttachment(a);
+      this.greet(ws,a,{ttGone:!!m.tt&&!tth&&!host});
       if(role==="teacher"){
-        this.send(ws,this.dcFor());
         // auto-post "table is open" when a teacher arrives and none was here in the last half hour
         const others=this.sockets().some(x=>x.ws!==ws&&x.a.role==="teacher");
         if(this.dc&&this.dc.url&&this.dc.auto&&!others&&Date.now()-(this.dc.last||0)>DC_AUTO_GAP) this.ctx.waitUntil(this.dcPost(a.name,"",false,true));
@@ -344,16 +361,45 @@ export class Lobby extends DurableObject{
         this.pf=pf; await this.ctx.storage.put("pf",pf);
         for(const {ws:o} of this.sockets()) this.send(o,{t:"pf",charts:pf});
         return;}
-      case "lockpw":{ // a teacher sets or removes the lobby's password
-        if(a.role!=="teacher"||this.meta.private) return;
+      case "role":{ // take turns in the hot seat: teachers hand off or share teaching; the host can always teach again
+        const tt=this.meta.tt||(this.meta.tt={});
+        // a person can have the lobby open in more than one tab: act on all of them
+        const others=peer=>{const t=this.sockets().find(y=>y.a.peer===peer);return t?this.sockets().filter(x=>x.a.cid===t.a.cid):[]};
+        let seatChanged=false;
+        const toStudent=async(w,x)=>{ if(!x.host&&x.tth){delete tt[x.tth];x.tth=null} x.role="student"; w.serializeAttachment(x); this.greet(w,x); };
+        const toTeacher=(w,x,token)=>{ x.role="teacher"; w.serializeAttachment(x); if(this.unseatCid(x.cid)) seatChanged=true; this.greet(w,x,token?{tt:token}:{}); };
+        if(m.op==="self"){
+          if(m.as==="student"&&a.role==="teacher") await toStudent(ws,a);
+          else if(m.as==="teacher"&&a.role==="student"&&(a.host||(a.tth&&tt[a.tth]))) toTeacher(ws,a);
+          else return;
+        } else if(m.op==="give"||m.op==="hand"){
+          if(a.role!=="teacher") return;
+          const tg=others(String(m.peer||"")); if(!tg.length||tg.some(x=>x.ws===ws)) return;
+          if(tg.every(x=>x.a.role==="teacher")) return;
+          const token=rid(16), h=await this.ttHash(token);
+          const keys=Object.keys(tt); if(keys.length>=60) delete tt[keys[0]];
+          tt[h]={name:tg[0].a.name,at:Date.now()};
+          for(const x of tg){ if(!x.a.host) x.a.tth=h; toTeacher(x.ws,x.a,token); }
+          if(m.op==="hand") await toStudent(ws,a);
+        } else if(m.op==="revoke"){
+          if(!a.host) return;
+          const tg=others(String(m.peer||"")); if(!tg.length||tg.some(x=>x.a.host)) return;
+          for(const x of tg){ if(x.a.tth) delete tt[x.a.tth]; x.a.tth=null; if(x.a.role==="teacher") await toStudent(x.ws,x.a); else x.ws.serializeAttachment(x.a); }
+        } else return;
+        await this.ctx.storage.put("meta",this.meta);
+        if(seatChanged) await this.commit(); else {this.broadcastPeers(); await this.dirUpdate();}
+        return;}
+      case "lockpw":{ // the host sets or removes the lobby's password
+        if(!a.host||this.meta.private) return;
         const pw=String(m.pw||"").trim();
         if(pw&&(pw.length<3||pw.length>40)){this.send(ws,{t:"error",msg:"The password needs 3 to 40 characters."});return}
         if(pw) this.meta.pw=await sha(this.meta.id+"|pw|"+pw); else delete this.meta.pw;
         await this.ctx.storage.put("meta",this.meta); await this.dirUpdate(true);
         for(const {ws:o} of this.sockets()) this.send(o,{t:"locked",on:!!this.meta.pw});
         return;}
-      case "dc":{ // Discord: a teacher sets the lobby's channel webhook, or posts that the table is open
-        if(a.role!=="teacher") return;
+      case "dc":{ // Discord: the host sets the lobby's channel webhook; teachers post that the table is open
+        if(a.role!=="teacher"&&!a.host) return;
+        if(m.op!=="post"&&!a.host){this.send(ws,{...this.dcFor(),err:"Only the host can change the Discord settings."});return}
         const dc={...(this.dc||{})};
         if(m.op==="set"){
           const url=String(m.url||"").trim();
@@ -369,7 +415,7 @@ export class Lobby extends DurableObject{
           return;
         } else return;
         this.dc=dc; await this.ctx.storage.put("dc",dc);
-        for(const {ws:o,a:x} of this.sockets()) if(x.role==="teacher") this.send(o,{...this.dcFor(),...(o===ws&&m.op==="set"?{ok:"Saved. Use \u201cPost to Discord\u201d to try it."}:{})});
+        for(const {ws:o,a:x} of this.sockets()) if(x.role==="teacher"||x.host) this.send(o,{...this.dcFor(),...(o===ws&&m.op==="set"?{ok:"Saved. Use \u201cPost to Discord\u201d to try it."}:{})});
         return;}
       case "svq":{ // ask the computer that solved for one spot in the tree
         if(!this.svOk(a)||!this.sv||!this.sv.host) return;

@@ -52,18 +52,21 @@
       <ol class="steps">
         <li>Open <a href="/play/">the table</a> and type your name under <b>You</b>.</li>
         <li>Under <b>Start a lobby</b>, give it a name your students will recognize, like “Tuesday study group”.</li>
-        <li>Choose a <b>teacher code</b>. Anyone with this code can see every card and run the table, so share it only with co-teachers. Write it down: there is no way to recover it.</li>
+        <li>Choose a <b>host code</b>. It makes you the lobby's host, the only one who can delete it, set its password and Discord settings, and remove teachers. Keep it to yourself and write it down: there is no way to recover it.</li>
         <li>To keep the lobby to your group, add a <b>student password</b>. The lobby shows a 🔒 in the list, and students type the password once to join; their browser remembers it. You can add, change or remove it later on the <span class="ui">People</span> tab.</li>
         <li>Press <span class="ui">Create lobby</span>. You're now at the table as a teacher.</li>
       </ol>
-      <p>Next time, this browser remembers your code: press <span class="ui">Rejoin as teacher</span> next to the lobby. On another device, press <span class="ui">Teach</span> and enter the code.</p>
+      <p>Next time, this browser remembers your code: press <span class="ui">Rejoin as teacher</span> next to the lobby. On another device, press <span class="ui">I'm the host</span> and enter the code.</p>
 
       <h2 id="students">Bring in students</h2>
       <p>Students need only the lobby's name. They open hotseatpoker.com/play, type their name, press <span class="ui">Join as student</span> on your lobby, and tap an open seat. The <b>People</b> tab on your side panel also has a direct link to paste into a group chat.</p>
-      <p>Co-teachers press <span class="ui">Teach</span> on the lobby and enter the teacher code. You'll see each other's pointers, and a colored outline shows what the other teacher is editing.</p>
+      <h3>Hosts, teachers and taking turns in the hot seat</h3>
+      <p>Every lobby has three roles. The <b>host</b> made the lobby and holds the host code. <b>Teachers</b> run the table: they deal, set cards, run polls and use every tool. <b>Students</b> sit and play. The host is also a teacher when they want to be.</p>
+      <p>On the <span class="ui">People</span> tab, any teacher can press <span class="ui">Hand off</span> next to a student: that student becomes the teacher and you become a student, so the group can take turns in the hot seat. <span class="ui">Make teacher</span> adds a co-teacher instead; you'll see each other's pointers, and a colored outline shows what the other teacher is editing. Someone who becomes a teacher gives up their seat, since teachers see every card. Teachers stay teachers if they reload or come back later on the same device.</p>
+      <p>A teacher can press <span class="ui">Become a student</span> to step down. The host can always press <span class="ui">Teach</span> to take the table back, and can <span class="ui">Remove as teacher</span> anyone else. Only the host can delete the lobby, set its password, or change its Discord settings.</p>
 
       <h3>Invite your group on Discord</h3>
-      <p>If your group has a Discord server, the site can post “the table is open” there with a join link. In Discord, open the channel's settings › <b>Integrations</b> › <b>Webhooks</b> › <b>New Webhook</b>, then <b>Copy Webhook URL</b>. In your lobby, open the <span class="ui">People</span> tab and paste it under <b>Invite on Discord</b>. From then on the site posts automatically when a teacher opens the table (at most once every 30 minutes), and <span class="ui">Post to Discord</span> sends one any time, with an optional message and an optional @here. Only teachers see the webhook, and only its last few characters.</p>
+      <p>If your group has a Discord server, the site can post “the table is open” there with a join link. In Discord, open the channel's settings › <b>Integrations</b> › <b>Webhooks</b> › <b>New Webhook</b>, then <b>Copy Webhook URL</b>. In your lobby, open the <span class="ui">People</span> tab and paste it under <b>Invite on Discord</b>. From then on the site posts automatically when a teacher opens the table (at most once every 30 minutes), and <span class="ui">Post to Discord</span> sends one any time, with an optional message and an optional @here. Only the host can set or remove the webhook; teachers can post with it, and see only its last few characters.</p>
 
       <h3>Play inside a Discord voice channel</h3>
       <p>Hot Seat Poker is also a Discord Activity. In a voice channel, open the Activities menu (the rocket button) and pick Hot Seat Poker. Everyone in the call who opens it sits at the same table, under their Discord name. Whoever started the Activity is the teacher; everyone else joins as a student. These tables aren't listed on the site, and the same Activity takes you back to the same table.</p>
@@ -202,10 +205,10 @@
       <dl>
         <dt>Does it cost anything?</dt>
         <dd>No. There are no accounts, and solves run on your own computers.</dd>
-        <dt>I lost the teacher code.</dt>
+        <dt>I lost the host code.</dt>
         <dd>It can't be recovered. If a browser that used it is still around, it can press Rejoin as teacher. Otherwise start a new lobby.</dd>
         <dt>How do I delete a lobby?</dt>
-        <dd>On the table page, press Teach on the lobby, enter the teacher code, and choose Delete this lobby.</dd>
+        <dd>If you're the host, open the lobby's People tab and choose Delete this lobby. From the table page you can also press I'm the host (or Manage) on the lobby, enter the host code, and choose Delete this lobby.</dd>
         <dt>Does it work on phones?</dt>
         <dd>Yes, for students and for viewing the solver. Running big solves works best on a laptop or desktop.</dd>
         <dt>Is the solver the same as the paid ones?</dt>

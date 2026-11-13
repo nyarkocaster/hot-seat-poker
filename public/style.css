@@ -645,3 +645,7 @@ details.types dd{margin:0 0 6px}
 /* minimized bar: a solid gold border so it stands out over the page */
 .mini.min{border:2px solid var(--gold);outline:0}
 .mini.min.turn{outline:2px solid var(--gold);outline-offset:2px}
+/* People tab: roles and hand-offs */
+.stu{gap:8px;flex-wrap:wrap}
+.stu .ops{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.chip.host{background:color-mix(in srgb,var(--gold) 22%,transparent);color:var(--ink);border-color:var(--gold);font-size:11px;padding:1px 6px}
