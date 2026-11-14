@@ -20,6 +20,9 @@ const DC_AUTO_GAP=30*60*1000, DC_MANUAL_GAP=60*1000;
 const lobbyStub=(env,id)=>env.LOBBY.get(env.LOBBY.idFromName(id));
 const dirStub=env=>env.DIRECTORY.get(env.DIRECTORY.idFromName("main"));
 const MAX_LOBBIES=200, MAX_SOCKETS=80;
+// a lobby nobody is connected to deletes itself after this long (EMPTY_TTL_MS overrides it, for testing)
+const EMPTY_TTL=4*60*60*1000;
+const emptyTtl=env=>Math.max(1000,+(env&&env.EMPTY_TTL_MS)||EMPTY_TTL);
 // keys a shared-solver patch may contain (see public/solver/core.js)
 const SV_KEYS=new Set(["spot","link","sync","status","host","hostName","where","threads","prog","info","cards","solved","path","solveId","err","mem","locks","base","report"]);
 
@@ -75,7 +78,12 @@ export default {
 };
 
 export class Directory extends DurableObject{
-  async list(){const m=await this.ctx.storage.list({prefix:"l:"});return [...m.values()].sort((a,b)=>(b.live-a.live)||(b.created-a.created))}
+  async list(){
+    const m=await this.ctx.storage.list({prefix:"l:"}), out=[...m.values()];
+    // lobbies that were empty before self-deleting existed: ask each once to start its countdown
+    for(const s of out) if(!(s.teachers+s.students)&&!this.swept?.has(s.id)){(this.swept||(this.swept=new Set())).add(s.id);this.ctx.waitUntil(lobbyStub(this.env,s.id).checkEmpty().catch(()=>{}))}
+    return out.sort((a,b)=>(b.live-a.live)||(b.created-a.created));
+  }
   async count(){return (await this.ctx.storage.list({prefix:"l:"})).size}
   // A deleted lobby gets a permanent marker so a late status update can never bring it back.
   async put(s){if(await this.ctx.storage.get("d:"+s.id)) return; await this.ctx.storage.put("l:"+s.id,s)}
@@ -88,7 +96,8 @@ export class Lobby extends DurableObject{
     this.E=createEngine(); this.meta=null; this.toks={}; this.fails=[]; this.curs=new Map(); this.lastDir=""; this.sv=null; this.nb=null; this.poll=null;
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}','{"t":"pong"}'));
     ctx.blockConcurrencyWhile(async()=>{
-      const v=await ctx.storage.get(["meta","g","hist","toks","sv","nb","poll","pf","dc"]);
+      const v=await ctx.storage.get(["meta","g","hist","toks","sv","nb","poll","pf","dc","empty"]);
+      this.empty=v.get("empty")||null; // when the last person left (null while someone is here)
       this.meta=v.get("meta")||null; this.toks=v.get("toks")||{}; this.sv=v.get("sv")||null; this.nb=v.get("nb")||null; this.poll=v.get("poll")||null; this.pf=v.get("pf")||{}; this.dc=v.get("dc")||{};
       if(v.get("g")) this.E.G=v.get("g");
       (v.get("hist")||[]).forEach(h=>this.E.history.push(h));
@@ -98,6 +107,7 @@ export class Lobby extends DurableObject{
     this.meta={id,name,hash,created:Date.now()}; if(pw) this.meta.pw=pw; this.E.G=freshGame(name); this.E.history.length=0;
     await this.ctx.storage.put({meta:this.meta,g:this.E.G,hist:[],toks:{}});
     await this.dirUpdate(true);
+    await this.markEmpty(); // a lobby nobody ever opens goes away too
   }
   // one lobby per Discord Activity instance: whoever opens it first teaches, everyone else joins as a student
   async discordJoin(id,uid,name){
@@ -106,6 +116,7 @@ export class Lobby extends DurableObject{
       this.meta={id,name:`${name}'s table`.slice(0,28),hash:await sha(id+"|"+normCode(code)),created:Date.now(),private:true};
       this.E.G=freshGame(this.meta.name); this.E.history.length=0; this.dco={owner:uid,code};
       await this.ctx.storage.put({meta:this.meta,g:this.E.G,hist:[],toks:{},dco:this.dco});
+      await this.markEmpty();
     }
     if(!this.dco) this.dco=(await this.ctx.storage.get("dco"))||null;
     const t=!!this.dco&&this.dco.owner===uid;
@@ -115,13 +126,32 @@ export class Lobby extends DurableObject{
     // Already gone (or never existed): just make sure no leftover list entry remains.
     if(!this.meta){await dirStub(this.env).remove(id);return {ok:true}}
     if(!(await this.checkCode(code))) return {ok:false,error:"That host code doesn't match this lobby."};
-    id=this.meta.id;
+    await this.wipe(); return {ok:true};
+  }
+  async wipe(){
+    const id=this.meta.id;
     // Clear this lobby first, so nothing it does while people disconnect can re-list it.
     this.meta=null; this.E.G=null; this.E.history.length=0; this.toks={}; this.lastDir=""; this.curs.clear(); this.sv=null; this.nb=null; this.poll=null; this.pf={}; this.dc={};
     await dirStub(this.env).remove(id);
     await this.ctx.storage.deleteAlarm(); await this.ctx.storage.deleteAll();
+    this.empty=null; this.botAt=null;
     for(const ws of this.ctx.getWebSockets()){try{ws.send(JSON.stringify({t:"deleted"}));ws.close(4004,"Lobby deleted")}catch(e){}}
-    return {ok:true};
+  }
+  // nobody connected: start (or keep) the countdown to deleting this lobby
+  async markEmpty(){
+    if(!this.meta) return;
+    if(!this.empty){this.empty=Date.now(); await this.ctx.storage.put("empty",this.empty)}
+    await this.schedule();
+  }
+  async markBusy(){if(this.empty){this.empty=null; await this.ctx.storage.delete("empty"); await this.schedule()}}
+  async checkEmpty(){if(this.meta&&!this.ctx.getWebSockets().some(w=>w.readyState===1)) await this.markEmpty()}
+  // one alarm serves the shot clock, computer players and the empty-lobby countdown: set it for the soonest
+  async schedule(){
+    const G=this.E.G, t=[];
+    if(G&&G.toAct!=null&&G.deadline) t.push(G.deadline);
+    if(this.botAt&&this.botTurn()) t.push(this.botAt);
+    if(this.empty) t.push(this.empty+emptyTtl(this.env));
+    if(t.length) await this.ctx.storage.setAlarm(Math.min(...t)); else await this.ctx.storage.deleteAlarm();
   }
   async checkCode(code){
     const now=Date.now(); this.fails=this.fails.filter(t=>now-t<60000);
@@ -222,9 +252,8 @@ export class Lobby extends DurableObject{
     const now=Date.now(), dl=E.armClock(now);
     await this.ctx.storage.put({g:E.G,hist:E.history});
     // a computer player is up: it acts after a short pause (on the alarm, like the shot clock)
-    const bt=this.botTurn()?now+thinkMs(E.G):null; this.botAt=bt;
-    const at=bt&&dl?Math.min(bt,dl):(bt||dl);
-    if(at) await this.ctx.storage.setAlarm(at); else await this.ctx.storage.deleteAlarm();
+    this.botAt=this.botTurn()?now+thinkMs(E.G):null; void dl;
+    await this.schedule();
     this.broadcastState(); this.broadcastPeers(); await this.dirUpdate();
   }
   async dirUpdate(force){
@@ -265,6 +294,7 @@ export class Lobby extends DurableObject{
       if(!canTeach&&this.meta.pw&&!(await this.checkPw(m.pw))){this.send(ws,{t:"error",code:"needpw",msg:this.fails.length>=8?"Too many wrong passwords. Wait a minute and try again.":m.pw?"That password doesn't match this lobby.":"This lobby needs a password."});ws.close(4002,"Password");return}
       Object.assign(a,{cid,role,host,tth,name:cleanName(m.name)||(role==="teacher"?"Teacher":"Student")}); ws.serializeAttachment(a);
       this.greet(ws,a,{ttGone:!!m.tt&&!tth&&!host});
+      await this.markBusy();
       if(role==="teacher"){
         // auto-post "table is open" when a teacher arrives and none was here in the last half hour
         const others=this.sockets().some(x=>x.ws!==ws&&x.a.role==="teacher");
@@ -439,20 +469,25 @@ export class Lobby extends DurableObject{
       for(const {ws:o} of this.svSockets(ws)) this.send(o,{t:"sv",p});
     }
     this.broadcastPeers(); await this.dirUpdate();
+    if(this.meta&&!this.ctx.getWebSockets().some(w=>w!==ws&&w.readyState===1)) await this.markEmpty();
   }
   async webSocketError(ws){await this.webSocketClose(ws)}
   botTurn(){const G=this.E.G;return !!(G&&G.toAct!=null&&["preflop","flop","turn","river"].includes(G.phase)&&G.seats[G.toAct]&&G.seats[G.toAct].bot)}
   async alarm(){
-    const E=this.E; if(!E.G) return;
-    const G=E.G;
+    const E=this.E; if(!E.G||!this.meta) return;
+    const G=E.G, now=Date.now();
+    // empty for long enough: delete the lobby
+    if(this.empty&&now>=this.empty+emptyTtl(this.env)-1000){
+      if(!this.ctx.getWebSockets().some(w=>w.readyState===1)){await this.wipe();return}
+      await this.markBusy();
+    }
     if(this.botTurn()){
-      if(this.botAt&&Date.now()<this.botAt-50){await this.ctx.storage.setAlarm(this.botAt);return}
+      if(this.botAt&&now<this.botAt-50){await this.schedule();return}
       const i=G.toAct; let d; try{d=botDecide(G,i)}catch(e){d={a:"fold"}}
       if(!E.runOp({t:"act",seat:i,a:d.a,amt:d.amt})&&!E.runOp({t:"act",seat:i,a:"check"})) E.runOp({t:"act",seat:i,a:"fold"});
       await this.commit(); return;
     }
-    if(G.toAct==null||!G.deadline) return;
-    if(Date.now()<G.deadline-250){await this.ctx.storage.setAlarm(G.deadline);return}
-    if(E.runOp({t:"timeout",turn:G.turn})) await this.commit();
+    if(G.toAct==null||!G.deadline||now<G.deadline-250){await this.schedule();return}
+    if(E.runOp({t:"timeout",turn:G.turn})) await this.commit(); else await this.schedule();
   }
 }
