@@ -6,6 +6,7 @@ import {createNotes} from "./notes.js";
 import {createOdds,createStove} from "./tools.js";
 import {createCombos} from "./combos.js";
 import {createMini} from "./mini.js";
+import {createAnchor} from "./anchor.js";
 import {createCharts} from "./charts.js";
 import {BOT_TYPES,BOT_ORDER,botLabel,decide as botDecide,thinkMs} from "./bots.js";
 
@@ -232,9 +233,13 @@ const MINI=createMini({
   label:()=>{const P=view();if(!P) return "Table";const st=P.phase==="done"?"Hand over":P.phase==="idle"?"Between hands":P.phase.charAt(0).toUpperCase()+P.phase.slice(1);return `${st} · Hand #${P.hand||0} · Pot ${money(P.seats.reduce((a,s)=>a+(s.total||0),0))}`},
   isMyTurn:()=>{const P=view();return !!P&&!isT()&&mySeat>=0&&P.toAct===mySeat},
   goHome:()=>{if(viewMode==="solver") setView("both")},
-  onToggle:v=>{const mo=document.getElementById("miniOn"); if(mo) mo.checked=v}
+  onToggle:v=>{const mo=document.getElementById("miniOn"); if(mo) mo.checked=v},
+  onHome:()=>ANCH.pause(1500),
+  corrected:()=>ANCH.corrected()
 });
 {const mo=document.getElementById("miniOn"); if(mo) mo.checked=MINI.isOn();}
+// keep what you're looking at still while panels redraw (see anchor.js)
+const ANCH=createAnchor({sel:".panel, .dk, #table, #actPanel, .minihome, .osec, .group",skip:e=>!!e.closest("#miniTable, #home")});
 function applyView(){
   const ok=solverAllowed(), v=ok?viewMode:"table";
   document.body.classList.toggle("v-table",v==="table");document.body.classList.toggle("v-solver",v==="solver");document.body.classList.toggle("v-both",v==="both");
@@ -375,7 +380,7 @@ function renderNow(){
   setHTML($("#log"),P.log.slice().reverse().map(t=>`<li>${esc(t)}</li>`).join("")||`<li class="muted">No hands yet.</li>`);
   if(T) renderTeacherSide(); else setSide(soloStu()?soloSide(P):studentSide(P));
   if(picker&&!T) picker=null;
-  drawPicker(); drawCursors(); tick(); botPump(); autoDeal(); MINI.sync(); MINI.check();
+  drawPicker(); drawCursors(); tick(); botPump(); autoDeal(); MINI.sync(); MINI.check(); ANCH.after();
 }
 /* the table is a racetrack (straight sides, round ends); seats, bets and the button sit on smaller
    racetracks inside it. t runs 0..1 around the track, starting bottom centre and going left first.

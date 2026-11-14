@@ -7,7 +7,7 @@ const BASE = 640, MINW = 240;
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { return {}; } };
 const save = o => { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} };
 
-export function createMini({ active, label, goHome, isMyTurn, onToggle }) {
+export function createMini({ active, label, goHome, isMyTurn, onToggle, onHome, corrected }) {
   const pref = Object.assign({ on: true, big: false, min: false, x: null, y: null, w: null }, load());
   const ids = ["table", "actPanel"];
   const box = document.createElement("div");
@@ -23,6 +23,12 @@ export function createMini({ active, label, goHome, isMyTurn, onToggle }) {
   document.body.appendChild(box);
   const body = box.querySelector(".minibody"), ttl = box.querySelector(".minittl");
   let floating = false, dismissed = false, holders = [];
+  // right after popping out or back, stay put unless you really scroll: the page settling after the switch
+  // (a panel redrawing, the table taking back its space) can't bounce it straight back
+  // (scrolling the page does to keep itself still doesn't count as you scrolling)
+  let switchedAt = 0, switchedY = 0, switchedC = 0, travel = 0; let recheck = 0;
+  const fixes = () => (corrected ? corrected() : 0);
+  const settle = () => { switchedAt = Date.now(); switchedY = scrollY; switchedC = fixes(); travel = 0; };
 
   const homeEl = () => floating ? holders[0] : document.getElementById("table");
   // how much of the table's spot is on screen. It pops out below one amount and back in only above a larger
@@ -34,7 +40,7 @@ export function createMini({ active, label, goHome, isMyTurn, onToggle }) {
     const out = Math.min(r.height * 0.3, 140), back = Math.min(r.height * 0.55, 260);
     return seen > (floating ? back : out);
   }
-  function float() {
+  function float(quiet) {
     if (floating) return;
     holders = ids.map(id => {
       const el = document.getElementById(id); const ph = document.createElement("div");
@@ -45,18 +51,29 @@ export function createMini({ active, label, goHome, isMyTurn, onToggle }) {
       if (el) { el.before(ph); body.appendChild(el); }
       return ph;
     });
-    floating = true; box.hidden = false; place(); sync();
+    floating = true; box.hidden = false; place(); sync(); if (!quiet) settle();
   }
-  function dock() {
+  function dock(quiet) {
     if (!floating) return;
     ids.forEach((id, k) => { const el = document.getElementById(id), ph = holders[k]; if (el && ph && ph.isConnected) ph.replaceWith(el); else if (ph) ph.remove(); });
-    holders = []; floating = false; box.hidden = true;
+    holders = []; floating = false; box.hidden = true; if (!quiet) settle();
   }
   function check() {
     if (!active() || !pref.on) { dock(); return; }
+    travel = Math.max(travel, Math.abs(scrollY - switchedY - (fixes() - switchedC)));
+    const h = homeEl(), hidden = !h || h.offsetParent === null || h.getBoundingClientRect().height < 20; // another view, or still loading
     const vis = homeVisible();
+    if (vis) dismissed = false; // the table is back on screen: a closed mini table may come back next time
+    const dt = Date.now() - switchedAt;
+    if (!hidden && dt < 900 && travel < 150) {
+      if (floating) sync();
+      // look again once the pause is over, in case you stopped scrolling inside it
+      if (!recheck) recheck = setTimeout(() => { recheck = 0; soon(); }, 920 - dt);
+      return;
+    }
     if (vis) { dismissed = false; dock(); return; }
-    if (!dismissed) float(); else dock();
+    // popping out because the table is hidden (another view, or still loading) isn't scrolling: no pause after it
+    if (!dismissed) float(hidden); else dock();
     if (floating) sync();
   }
   function sync() {
@@ -121,11 +138,13 @@ export function createMini({ active, label, goHome, isMyTurn, onToggle }) {
   box.addEventListener("click", e => {
     const b = e.target.closest("[data-mini]"); if (!b || b.dataset.mini === "drag") return;
     const c = b.dataset.mini;
-    if (c === "close") { dismissed = true; dock(); offerOff(); }
+    if (c === "close") { dismissed = true; dock(true); offerOff(); }
     else if (c === "min") setMin(!pref.min);
     else if (c === "size") { pref.big = !pref.big; save(pref); sync(); place(); }
     else if (c === "home") {
       const ph = holders[0];
+      if (onHome) onHome();
+      switchedAt = 0; // a deliberate choice: don't hold it back
       if (ph && ph.offsetParent === null && goHome) goHome(); // the table is in a hidden view: show it
       requestAnimationFrame(() => { const h = homeEl(); if (h) h.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }); });
     }
