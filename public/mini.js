@@ -25,19 +25,23 @@ export function createMini({ active, label, goHome, isMyTurn, onToggle }) {
   let floating = false, dismissed = false, holders = [];
 
   const homeEl = () => floating ? holders[0] : document.getElementById("table");
-  // is the table's spot in the page on screen?
+  // how much of the table's spot is on screen. It pops out below one amount and back in only above a larger
+  // one, so a page that shifts a little (a solve in progress redraws it many times a second) can't flip it back and forth
   function homeVisible() {
     const h = homeEl(); if (!h || !h.isConnected || h.offsetParent === null) return false;
     const r = h.getBoundingClientRect(), vh = innerHeight || 800;
     const seen = Math.min(r.bottom, vh) - Math.max(r.top, 0);
-    return seen > Math.min(r.height * 0.35, 160);
+    const out = Math.min(r.height * 0.3, 140), back = Math.min(r.height * 0.55, 260);
+    return seen > (floating ? back : out);
   }
   function float() {
     if (floating) return;
     holders = ids.map(id => {
       const el = document.getElementById(id); const ph = document.createElement("div");
       ph.className = "minihome"; ph.dataset.for = id;
-      ph.style.height = el && el.offsetParent !== null ? el.offsetHeight + "px" : "0px";
+      // the placeholder takes exactly the table's space, margins included, so nothing on the page moves
+      if (el && el.offsetParent !== null) { const cs = getComputedStyle(el); ph.style.height = el.offsetHeight + "px"; ph.style.marginTop = cs.marginTop; ph.style.marginBottom = cs.marginBottom; }
+      else ph.style.height = "0px";
       if (el) { el.before(ph); body.appendChild(el); }
       return ph;
     });
