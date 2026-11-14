@@ -276,7 +276,12 @@ export function createEngine(opts={}){
       case "out":{const s=seat();if(!s) return false;s.out=!!o.v;return true}
       case "btn":{const i=n(o.i);if(!between()||i<0||i>=G.size) return false;G.button=i;return true}
       case "deal": if(!between()) return false; return startHand();
-      case "reset":{const keep=G.seats.map(s=>s.uid);const ln=G.lname,rules=G.rules;G=freshGame(ln);G.rules=rules;G.seats.forEach((s,i)=>{s.uid=keep[i]});return true}
+      // a fresh table: new hand, stacks, board and log, but everyone seated (students and computer players)
+      // keeps their seat and name, and the table keeps its size, blinds and rules
+      case "reset":{const old=G;G=freshGame(old.lname);G.rules=old.rules;G.size=old.size;G.blinds={...old.blinds};
+        G.keepSetup=old.keepSetup;G.minRaise=G.blinds.bb;
+        G.seats.forEach((s,i)=>{const o=old.seats[i];s.stack=G.blinds.bb*100;if(o.uid||o.bot){s.uid=o.uid;s.name=o.name;s.bot=o.bot;s.bp=o.bp}});
+        log("Table reset");return true}
       case "voidhand": if(between()) return false;
         G.seats.forEach(s=>{s.stack+=s.total;Object.assign(s,{cards:null,bet:0,total:0,folded:false,allin:false,acted:false,shown:false,open:false})});
         G.board=[];G.board2=null;G.ritOn=false;G.phase="idle";setToAct(null);G.result="";log("Hand cancelled; chips returned");return true;
